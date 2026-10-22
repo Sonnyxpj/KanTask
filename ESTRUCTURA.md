@@ -85,6 +85,8 @@ src/
 | Checklist_Item | id, tareaId (FK), descripción, completado | `checklist.ts` |
 | Evidencia | id, tareaId (FK), urlFoto, fecha | `evidencias.ts` |
 
+El esquema SQL de estas tablas (con RLS por rol, Storage y Realtime) está en `supabase/schema.sql`, fuera de `src/`.
+
 ## Flujo de datos
 
 ```
