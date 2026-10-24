@@ -1,13 +1,17 @@
-import { useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { InvitacionItem } from '@/components/equipo/InvitacionItem';
 import { MiembroItem } from '@/components/equipo/MiembroItem';
+import { ModalInvitar } from '@/components/equipo/ModalInvitar';
 import { BadgeEnVivo, Chip } from '@/components/ui/Badge';
 import { Encabezado } from '@/components/ui/Encabezado';
 import { Icono } from '@/components/ui/Icono';
 import { Colores, Espacio, Radio } from '@/constants/colores';
 import { TAREAS, USUARIO_ACTUAL, USUARIOS } from '@/constants/datos-demo';
+import { cancelarInvitacion, listarInvitaciones } from '@/services/invitaciones';
+import type { Invitacion } from '@/types/modelos';
 
 const ORDEN = ['Por asignado', 'Por rol: Editor/Visualizador', 'En vivo'] as const;
 type Orden = (typeof ORDEN)[number];
@@ -16,6 +20,26 @@ type Orden = (typeof ORDEN)[number];
 export default function Equipo() {
   const [busqueda, setBusqueda] = useState('');
   const [orden, setOrden] = useState<Orden>('Por asignado');
+  const [invitando, setInvitando] = useState(false);
+  const [invitaciones, setInvitaciones] = useState<Invitacion[]>([]);
+  const puedeInvitar = USUARIO_ACTUAL.rol === 'editor';
+
+  useEffect(() => {
+    listarInvitaciones().then(setInvitaciones).catch(() => {});
+  }, []);
+
+  const cancelar = (inv: Invitacion) =>
+    Alert.alert('Cancelar invitación', `¿Quitar la invitación de ${inv.nombre}?`, [
+      { text: 'No', style: 'cancel' },
+      {
+        text: 'Sí, cancelar',
+        style: 'destructive',
+        onPress: () =>
+          cancelarInvitacion(inv.id)
+            .then(() => setInvitaciones((l) => l.filter((i) => i.id !== inv.id)))
+            .catch((e: Error) => Alert.alert('Error', e.message)),
+      },
+    ]);
 
   const tareasDe = (id: string) => TAREAS.filter((t) => t.asignadoA === id).length;
   const conectados = USUARIOS.filter((u) => u.enVivo).length;
@@ -31,7 +55,13 @@ export default function Equipo() {
       <Encabezado
         titulo="Equipo en vivo"
         subtitulo={`${USUARIO_ACTUAL.turno} · ${USUARIOS.length} integrantes`}
-        accion={<Icono nombre="agregarPersona" color={Colores.textoSecundario} />}
+        accion={
+          puedeInvitar && (
+            <Pressable onPress={() => setInvitando(true)} hitSlop={8} accessibilityLabel="Agregar integrante">
+              <Icono nombre="agregarPersona" color={Colores.textoSecundario} />
+            </Pressable>
+          )
+        }
       />
 
       <ScrollView contentContainerStyle={styles.contenido} keyboardShouldPersistTaps="handled">
@@ -70,7 +100,24 @@ export default function Equipo() {
             <MiembroItem key={u.id} usuario={u} tareas={tareasDe(u.id)} />
           ))}
         </View>
+
+        {invitaciones.length > 0 && (
+          <>
+            <Text style={styles.seccion}>INVITACIONES PENDIENTES</Text>
+            <View style={styles.lista}>
+              {invitaciones.map((inv) => (
+                <InvitacionItem key={inv.id} invitacion={inv} onCancelar={puedeInvitar ? () => cancelar(inv) : undefined} />
+              ))}
+            </View>
+          </>
+        )}
       </ScrollView>
+
+      <ModalInvitar
+        visible={invitando}
+        onCerrar={() => setInvitando(false)}
+        onInvitado={(inv) => setInvitaciones((l) => [inv, ...l])}
+      />
     </SafeAreaView>
   );
 }

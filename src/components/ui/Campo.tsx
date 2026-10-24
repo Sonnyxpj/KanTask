@@ -9,16 +9,24 @@ type Props = TextInputProps & {
   icono?: NombreIcono;
   error?: string;
   contrasena?: boolean;
+  onPressIcono?: () => void;
 };
 
-export function Campo({ etiqueta, icono, error, contrasena, style, ...props }: Props) {
+export function Campo({ etiqueta, icono, error, contrasena, onPressIcono, style, ...props }: Props) {
   const [oculto, setOculto] = useState(true);
 
   return (
     <View style={styles.contenedor}>
       {etiqueta && <Text style={styles.etiqueta}>{etiqueta}</Text>}
       <View style={[styles.caja, error && styles.cajaError]}>
-        {icono && <Icono nombre={icono} tamano={18} color={Colores.textoSecundario} />}
+        {icono &&
+          (onPressIcono ? (
+            <Pressable onPress={onPressIcono} hitSlop={8}>
+              <Icono nombre={icono} tamano={18} color={Colores.primario} />
+            </Pressable>
+          ) : (
+            <Icono nombre={icono} tamano={18} color={Colores.textoSecundario} />
+          ))}
         <TextInput
           placeholderTextColor={Colores.textoTenue}
           secureTextEntry={contrasena && oculto}

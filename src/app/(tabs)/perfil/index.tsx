@@ -65,8 +65,6 @@ export default function Perfil() {
           <Ajuste icono="equipo" titulo="Configuración de equipo" detalle="Integrantes y roles del tablero" />
           <View style={styles.separador} />
           <Ajuste icono="idioma" titulo="Idioma" detalle="Español" />
-          <View style={styles.separador} />
-          <Ajuste icono="ayuda" titulo="Ayuda y soporte" detalle="Centro de ayuda y contacto" />
         </View>
 
         <Boton titulo="Cerrar sesión" icono="salir" variante="peligro" onPress={() => router.replace('/')} />

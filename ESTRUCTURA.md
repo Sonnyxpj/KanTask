@@ -28,7 +28,9 @@ src/
 │   │   ├── Checklist.tsx             # Lista de verificación de subtareas
 │   │   └── Evidencias.tsx            # Galería de fotos de cierre
 │   ├── equipo/
-│   │   └── MiembroItem.tsx           # Fila de integrante con rol y estado
+│   │   ├── MiembroItem.tsx           # Fila de integrante con rol y estado
+│   │   ├── InvitacionItem.tsx        # Fila de invitación pendiente
+│   │   └── ModalInvitar.tsx          # Formulario "Agregar integrante"
 │   └── ui/                           # Botones, inputs, badges, etc.
 │
 ├── context/                          # ESTADO GLOBAL (Context API)
@@ -46,6 +48,7 @@ src/
 ├── services/                         # ACCESO A DATOS (una tabla por archivo)
 │   ├── auth.ts                       # signIn, signUp, signOut
 │   ├── usuarios.ts                   # Usuario
+│   ├── invitaciones.ts               # Invitar integrantes al equipo con su rol
 │   ├── tableros.ts                   # Tablero
 │   ├── columnas.ts                   # Columna
 │   ├── tareas.ts                     # Tarea: crear, editar, mover de columna, borrar

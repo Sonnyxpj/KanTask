@@ -15,6 +15,15 @@ export type Usuario = {
   telefono?: string;
 };
 
+export type Invitacion = {
+  id: string;
+  nombre: string;
+  correo: string;
+  rol: Rol;
+  cargo?: string;
+  fecha: string;
+};
+
 export type Tablero = {
   id: string;
   nombre: string;

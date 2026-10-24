@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/ui/Avatar';
 import { Boton } from '@/components/ui/Boton';
+import { Calendario } from '@/components/ui/Calendario';
 import { Campo } from '@/components/ui/Campo';
 import { Colores, Espacio, Radio } from '@/constants/colores';
 import { USUARIOS } from '@/constants/datos-demo';
@@ -23,6 +24,11 @@ type Props = {
 
 type Errores = Partial<Record<'titulo' | 'fechaLimite' | 'asignadoA', string>>;
 
+function leerFecha(texto: string): Date | null {
+  const m = texto.match(/^(\d{2})-(\d{2})-(\d{4})/);
+  return m ? new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1])) : null;
+}
+
 export function FormTarea({ onGuardar }: Props) {
   const [valores, setValores] = useState<ValoresTarea>({
     titulo: '',
@@ -32,9 +38,19 @@ export function FormTarea({ onGuardar }: Props) {
     asignadoA: '',
   });
   const [errores, setErrores] = useState<Errores>({});
+  const [calendarioAbierto, setCalendarioAbierto] = useState(false);
 
   const cambiar = <K extends keyof ValoresTarea>(campo: K, valor: ValoresTarea[K]) =>
     setValores((v) => ({ ...v, [campo]: valor }));
+
+  // Reemplaza la parte DD-MM-AAAA y conserva la hora si ya se escribió
+  const elegirFecha = (fecha: Date) => {
+    const dd = String(fecha.getDate()).padStart(2, '0');
+    const mm = String(fecha.getMonth() + 1).padStart(2, '0');
+    const hora = valores.fechaLimite.match(/\d{1,2}:\d{2}/)?.[0];
+    cambiar('fechaLimite', `${dd}-${mm}-${fecha.getFullYear()}${hora ? ` ${hora}` : ''}`);
+    setCalendarioAbierto(false);
+  };
 
   const guardar = () => {
     const nuevos: Errores = {};
@@ -85,14 +101,20 @@ export function FormTarea({ onGuardar }: Props) {
         </View>
       </View>
 
-      <Campo
-        etiqueta="Fecha límite *"
-        placeholder="DD-MM-AAAA HH:MM"
-        icono="calendario"
-        value={valores.fechaLimite}
-        onChangeText={(t) => cambiar('fechaLimite', t)}
-        error={errores.fechaLimite}
-      />
+      <View style={styles.grupo}>
+        <Campo
+          etiqueta="Fecha límite *"
+          placeholder="DD-MM-AAAA HH:MM"
+          icono="calendario"
+          onPressIcono={() => setCalendarioAbierto((a) => !a)}
+          value={valores.fechaLimite}
+          onChangeText={(t) => cambiar('fechaLimite', t)}
+          error={errores.fechaLimite}
+        />
+        {calendarioAbierto && (
+          <Calendario seleccionada={leerFecha(valores.fechaLimite)} onSeleccionar={elegirFecha} />
+        )}
+      </View>
 
       <View style={styles.grupo}>
         <Text style={styles.etiqueta}>Responsable *</Text>

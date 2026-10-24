@@ -8,6 +8,7 @@
 --   · Validación de cierre: checklist completo + al menos una foto de evidencia
 --   · Bucket de Storage "evidencias" para las fotos
 --   · Tabla "actividad" para la Pantalla 4 (se llena sola con triggers)
+--   · Tabla "invitaciones" para sumar integrantes con su rol (Pantalla 5)
 --   · Publicación Realtime para sincronizar entre dispositivos
 --
 -- Uso: Supabase Dashboard → SQL Editor → pegar este archivo → Run.
@@ -105,6 +106,19 @@ create table public.actividad (
   created_at       timestamptz not null default now()
 );
 
+-- Invitación (Pantalla 5 · botón "agregar persona"): un editor registra correo y rol;
+-- al registrarse con ese correo, crear_perfil_usuario() aplica el rol y el cargo.
+create table public.invitaciones (
+  id           uuid primary key default gen_random_uuid(),
+  correo       text not null unique check (correo = lower(correo) and correo like '%_@_%'),
+  nombre       text not null check (char_length(nombre) between 1 and 80),
+  rol          public.rol_usuario not null default 'editor',
+  cargo        text,
+  invitado_por uuid default auth.uid() references public.usuarios (id) on delete set null,
+  aceptada_en  timestamptz,                                   -- null = pendiente
+  created_at   timestamptz not null default now()
+);
+
 -- Índices para las consultas más frecuentes
 create index on public.tableros (usuario_id);
 create index on public.columnas (tablero_id);
@@ -153,19 +167,31 @@ create trigger tareas_updated_at before update on public.tareas
 
 -- Crear el perfil en public.usuarios cuando alguien se registra en Supabase Auth.
 -- El nombre se toma de options.data.nombre en supabase.auth.signUp().
+-- Si el correo tenía una invitación pendiente, se usan su rol, nombre y cargo.
 create or replace function public.crear_perfil_usuario()
 returns trigger
 language plpgsql
 security definer
 set search_path = ''
 as $$
+declare
+  inv public.invitaciones;
 begin
-  insert into public.usuarios (id, nombre, correo)
+  select * into inv from public.invitaciones
+  where correo = lower(new.email) and aceptada_en is null;
+
+  insert into public.usuarios (id, nombre, correo, rol, cargo)
   values (
     new.id,
-    coalesce(nullif(new.raw_user_meta_data ->> 'nombre', ''), split_part(new.email, '@', 1)),
-    new.email
+    coalesce(nullif(new.raw_user_meta_data ->> 'nombre', ''), inv.nombre, split_part(new.email, '@', 1)),
+    new.email,
+    coalesce(inv.rol, 'editor'),
+    inv.cargo
   );
+
+  if inv.id is not null then
+    update public.invitaciones set aceptada_en = now() where id = inv.id;
+  end if;
   return new;
 end;
 $$;
@@ -311,6 +337,7 @@ alter table public.tareas          enable row level security;
 alter table public.checklist_items enable row level security;
 alter table public.evidencias      enable row level security;
 alter table public.actividad       enable row level security;
+alter table public.invitaciones    enable row level security;
 
 -- usuarios
 create policy "usuarios: leer" on public.usuarios
@@ -351,6 +378,15 @@ create policy "evidencias: leer" on public.evidencias
 create policy "evidencias: escribir (editor)" on public.evidencias
   for all to authenticated using ((select public.es_editor())) with check ((select public.es_editor()));
 
+-- invitaciones: todos ven las pendientes; solo editores invitan o cancelan
+create policy "invitaciones: leer" on public.invitaciones
+  for select to authenticated using (true);
+create policy "invitaciones: crear (editor)" on public.invitaciones
+  for insert to authenticated
+  with check ((select public.es_editor()) and invitado_por = (select auth.uid()));
+create policy "invitaciones: cancelar (editor)" on public.invitaciones
+  for delete to authenticated using ((select public.es_editor()) and aceptada_en is null);
+
 -- actividad: solo lectura (la escriben los triggers)
 create policy "actividad: leer" on public.actividad
   for select to authenticated using (true);
@@ -389,4 +425,5 @@ alter publication supabase_realtime add table
   public.tareas,
   public.checklist_items,
   public.evidencias,
-  public.actividad;
+  public.actividad,
+  public.invitaciones;
