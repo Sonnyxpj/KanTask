@@ -10,11 +10,14 @@ import { Icono } from '@/components/ui/Icono';
 import { Colores, Espacio } from '@/constants/colores';
 import { CHECKLIST, TAREAS } from '@/constants/datos-demo';
 import { COLUMNAS } from '@/constants/estados';
+import { useEquipo } from '@/lib/equipo';
 
 // Pantalla 2 · Tablero Kanban
 export default function Tablero() {
   const { width } = useWindowDimensions();
   const anchoColumna = Math.min(280, width * 0.72);
+  const { actual } = useEquipo();
+  const esEditor = actual?.rol === 'editor';
 
   return (
     <SafeAreaView edges={['top']} style={styles.pantalla}>
@@ -58,13 +61,16 @@ export default function Tablero() {
         </ScrollView>
       </ScrollView>
 
-      <Boton
-        titulo="Agregar tarea"
-        icono="mas"
-        variante="flotante"
-        estilo={styles.fab}
-        onPress={() => router.push('/tablero/nueva')}
-      />
+      {/* Solo los editores pueden crear tareas */}
+      {esEditor && (
+        <Boton
+          titulo="Agregar tarea"
+          icono="mas"
+          variante="flotante"
+          estilo={styles.fab}
+          onPress={() => router.push('/tablero/nueva')}
+        />
+      )}
     </SafeAreaView>
   );
 }
