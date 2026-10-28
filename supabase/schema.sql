@@ -5,15 +5,15 @@
 --   Usuario, Tablero, Columna, Tarea, Checklist_Item, Evidencia
 -- Además incluye:
 --   · Roles Editor / Visualizador con Row Level Security (RLS)
+--   · Cuentas nuevas como Visualizador; un editor cambia roles con cambiar_rol()
+--   · Correo del perfil sincronizado con Supabase Auth al confirmar un cambio
 --   · Validación de cierre: checklist completo + al menos una foto de evidencia
 --   · Bucket de Storage "evidencias" para las fotos
 --   · Tabla "actividad" para la Pantalla 4 (se llena sola con triggers)
---   · Tabla "invitaciones" para sumar integrantes con su rol (Pantalla 5)
 --   · Publicación Realtime para sincronizar entre dispositivos
 --
 -- Uso: Supabase Dashboard → SQL Editor → pegar este archivo → Run.
 -- =============================================================================
-
 
 -- =============================================================================
 -- 1. TIPOS
@@ -34,7 +34,7 @@ create table public.usuarios (
   id          uuid primary key references auth.users (id) on delete cascade,
   nombre      text not null check (char_length(nombre) between 1 and 80),
   correo      text not null unique,
-  rol         public.rol_usuario not null default 'editor',
+  rol         public.rol_usuario not null default 'visualizador',
   turno       text,
   en_vivo     boolean not null default false,
   cargo       text,
@@ -106,19 +106,6 @@ create table public.actividad (
   created_at       timestamptz not null default now()
 );
 
--- Invitación (Pantalla 5 · botón "agregar persona"): un editor registra correo y rol;
--- al registrarse con ese correo, crear_perfil_usuario() aplica el rol y el cargo.
-create table public.invitaciones (
-  id           uuid primary key default gen_random_uuid(),
-  correo       text not null unique check (correo = lower(correo) and correo like '%_@_%'),
-  nombre       text not null check (char_length(nombre) between 1 and 80),
-  rol          public.rol_usuario not null default 'editor',
-  cargo        text,
-  invitado_por uuid default auth.uid() references public.usuarios (id) on delete set null,
-  aceptada_en  timestamptz,                                   -- null = pendiente
-  created_at   timestamptz not null default now()
-);
-
 -- Índices para las consultas más frecuentes
 create index on public.tableros (usuario_id);
 create index on public.columnas (tablero_id);
@@ -167,31 +154,21 @@ create trigger tareas_updated_at before update on public.tareas
 
 -- Crear el perfil en public.usuarios cuando alguien se registra en Supabase Auth.
 -- El nombre se toma de options.data.nombre en supabase.auth.signUp().
--- Si el correo tenía una invitación pendiente, se usan su rol, nombre y cargo.
+-- Toda cuenta nueva parte como visualizador; un editor puede cambiarla con cambiar_rol().
 create or replace function public.crear_perfil_usuario()
 returns trigger
 language plpgsql
 security definer
 set search_path = ''
 as $$
-declare
-  inv public.invitaciones;
 begin
-  select * into inv from public.invitaciones
-  where correo = lower(new.email) and aceptada_en is null;
-
-  insert into public.usuarios (id, nombre, correo, rol, cargo)
+  insert into public.usuarios (id, nombre, correo, rol)
   values (
     new.id,
-    coalesce(nullif(new.raw_user_meta_data ->> 'nombre', ''), inv.nombre, split_part(new.email, '@', 1)),
+    coalesce(nullif(new.raw_user_meta_data ->> 'nombre', ''), split_part(new.email, '@', 1)),
     new.email,
-    coalesce(inv.rol, 'editor'),
-    inv.cargo
+    'visualizador'
   );
-
-  if inv.id is not null then
-    update public.invitaciones set aceptada_en = now() where id = inv.id;
-  end if;
   return new;
 end;
 $$;
@@ -200,14 +177,17 @@ create trigger al_registrar_usuario
   after insert on auth.users
   for each row execute function public.crear_perfil_usuario();
 
--- Un usuario puede editar su perfil, pero no cambiarse el rol a sí mismo
+-- Un usuario puede editar su perfil, pero no cambiarse el rol a sí mismo.
+-- Desde la app el rol solo cambia a través de cambiar_rol(); el panel de Supabase sigue pudiendo
 create or replace function public.proteger_rol()
 returns trigger
 language plpgsql
 set search_path = ''
 as $$
 begin
-  if new.rol is distinct from old.rol and auth.uid() is not null then
+  if new.rol is distinct from old.rol
+    and auth.uid() is not null
+    and coalesce(current_setting('kantask.cambiando_rol', true), '') <> 'si' then
     raise exception 'No puedes cambiar tu propio rol';
   end if;
   return new;
@@ -216,6 +196,76 @@ $$;
 
 create trigger usuarios_proteger_rol before update on public.usuarios
   for each row execute function public.proteger_rol();
+
+-- Un editor cambia el rol de otro integrante (no el suyo, así siempre queda al menos un editor)
+create or replace function public.cambiar_rol(p_usuario uuid, p_rol public.rol_usuario)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  existe boolean;
+begin
+  if not public.es_editor() then
+    raise exception 'Solo los editores pueden cambiar roles';
+  end if;
+  if p_usuario = auth.uid() then
+    raise exception 'No puedes cambiar tu propio rol';
+  end if;
+
+  perform set_config('kantask.cambiando_rol', 'si', true);
+  update public.usuarios set rol = p_rol where id = p_usuario;
+  existe := found;
+  perform set_config('kantask.cambiando_rol', '', true);
+
+  if not existe then
+    raise exception 'El usuario no existe';
+  end if;
+end;
+$$;
+
+revoke execute on function public.cambiar_rol(uuid, public.rol_usuario) from public, anon;
+grant execute on function public.cambiar_rol(uuid, public.rol_usuario) to authenticated;
+
+-- El correo del perfil solo cambia cuando Supabase Auth confirma el nuevo correo
+create or replace function public.proteger_correo()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  -- Solo sincronizar_correo_usuario() activa esta marca
+  if new.correo is distinct from old.correo
+    and coalesce(current_setting('kantask.sincronizando_correo', true), '') <> 'si' then
+    raise exception 'El correo se cambia desde Supabase Auth';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger usuarios_proteger_correo before update on public.usuarios
+  for each row execute function public.proteger_correo();
+
+-- Copiar el correo confirmado de auth.users a public.usuarios
+create or replace function public.sincronizar_correo_usuario()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  perform set_config('kantask.sincronizando_correo', 'si', true);
+  update public.usuarios set correo = new.email where id = new.id;
+  perform set_config('kantask.sincronizando_correo', '', true);
+  return new;
+end;
+$$;
+
+create trigger al_cambiar_correo_usuario
+  after update of email on auth.users
+  for each row when (new.email is distinct from old.email)
+  execute function public.sincronizar_correo_usuario();
 
 -- Columnas por defecto al crear un tablero
 create or replace function public.crear_columnas_por_defecto()
@@ -274,7 +324,7 @@ set search_path = ''
 as $$
 begin
   if new.asignado_a is not null
-     and (tg_op = 'INSERT' or new.asignado_a is distinct from old.asignado_a) then
+    and (tg_op = 'INSERT' or new.asignado_a is distinct from old.asignado_a) then
     insert into public.actividad (tipo, texto, tarea_id, usuario_id, destinatario_id)
     values ('asignacion', format('Se asignó ''%s''', new.titulo), new.id, auth.uid(), new.asignado_a);
   end if;
@@ -337,7 +387,6 @@ alter table public.tareas          enable row level security;
 alter table public.checklist_items enable row level security;
 alter table public.evidencias      enable row level security;
 alter table public.actividad       enable row level security;
-alter table public.invitaciones    enable row level security;
 
 -- usuarios
 create policy "usuarios: leer" on public.usuarios
@@ -378,15 +427,6 @@ create policy "evidencias: leer" on public.evidencias
 create policy "evidencias: escribir (editor)" on public.evidencias
   for all to authenticated using ((select public.es_editor())) with check ((select public.es_editor()));
 
--- invitaciones: todos ven las pendientes; solo editores invitan o cancelan
-create policy "invitaciones: leer" on public.invitaciones
-  for select to authenticated using (true);
-create policy "invitaciones: crear (editor)" on public.invitaciones
-  for insert to authenticated
-  with check ((select public.es_editor()) and invitado_por = (select auth.uid()));
-create policy "invitaciones: cancelar (editor)" on public.invitaciones
-  for delete to authenticated using ((select public.es_editor()) and aceptada_en is null);
-
 -- actividad: solo lectura (la escriben los triggers)
 create policy "actividad: leer" on public.actividad
   for select to authenticated using (true);
@@ -425,5 +465,4 @@ alter publication supabase_realtime add table
   public.tareas,
   public.checklist_items,
   public.evidencias,
-  public.actividad,
-  public.invitaciones;
+  public.actividad;

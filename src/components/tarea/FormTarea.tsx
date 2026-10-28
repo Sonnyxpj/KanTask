@@ -6,8 +6,8 @@ import { Boton } from '@/components/ui/Boton';
 import { Calendario } from '@/components/ui/Calendario';
 import { Campo } from '@/components/ui/Campo';
 import { Colores, Espacio, Radio } from '@/constants/colores';
-import { USUARIOS } from '@/constants/datos-demo';
 import { PRIORIDADES } from '@/constants/estados';
+import { useEquipo } from '@/lib/equipo';
 import type { Prioridad } from '@/types/modelos';
 
 export type ValoresTarea = {
@@ -38,6 +38,7 @@ export function FormTarea({ onGuardar }: Props) {
     asignadoA: '',
   });
   const [errores, setErrores] = useState<Errores>({});
+  const { usuarios } = useEquipo();
   const [calendarioAbierto, setCalendarioAbierto] = useState(false);
 
   const cambiar = <K extends keyof ValoresTarea>(campo: K, valor: ValoresTarea[K]) =>
@@ -119,7 +120,7 @@ export function FormTarea({ onGuardar }: Props) {
       <View style={styles.grupo}>
         <Text style={styles.etiqueta}>Responsable *</Text>
         <View style={styles.opciones}>
-          {USUARIOS.filter((u) => u.rol === 'editor').map((u) => {
+          {usuarios.filter((u) => u.rol === 'editor').map((u) => {
             const activo = valores.asignadoA === u.id;
             return (
               <Pressable

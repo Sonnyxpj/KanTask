@@ -8,7 +8,8 @@ import { BadgeEnVivo, Chip } from '@/components/ui/Badge';
 import { Encabezado } from '@/components/ui/Encabezado';
 import { Icono, type NombreIcono } from '@/components/ui/Icono';
 import { Colores, Espacio, Radio } from '@/constants/colores';
-import { ACTIVIDAD, buscarUsuario, type TipoActividad } from '@/constants/datos-demo';
+import { ACTIVIDAD, type TipoActividad } from '@/constants/datos-demo';
+import { useEquipo } from '@/lib/equipo';
 
 const FILTROS = ['Todas', 'Menciones', 'Tareas', 'Evidencias'] as const;
 type Filtro = (typeof FILTROS)[number];
@@ -24,6 +25,7 @@ const TIPOS: Record<TipoActividad, { icono: NombreIcono; color: string; fondo: s
 // Pantalla 4 · Actividad en vivo
 export default function Actividad() {
   const [filtro, setFiltro] = useState<Filtro>('Todas');
+  const { buscarUsuario } = useEquipo();
   const lista = ACTIVIDAD.filter((a) => filtro === 'Todas' || TIPOS[a.tipo].filtro === filtro);
 
   return (

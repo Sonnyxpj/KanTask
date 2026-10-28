@@ -9,12 +9,14 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Boton } from '@/components/ui/Boton';
 import { Icono } from '@/components/ui/Icono';
 import { Colores, Espacio } from '@/constants/colores';
-import { buscarUsuario, CHECKLIST, EVIDENCIAS, TAREAS } from '@/constants/datos-demo';
+import { CHECKLIST, EVIDENCIAS, TAREAS } from '@/constants/datos-demo';
 import { COLUMNAS, PRIORIDADES } from '@/constants/estados';
+import { useEquipo } from '@/lib/equipo';
 
 // Pantalla 3 · Detalle de tarea
 export default function DetalleTarea() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { buscarUsuario } = useEquipo();
   const tarea = TAREAS.find((t) => t.id === id) ?? TAREAS[0];
   const [items, setItems] = useState(() => CHECKLIST.filter((c) => c.tareaId === tarea.id));
   const fotos = EVIDENCIAS.filter((e) => e.tareaId === tarea.id);

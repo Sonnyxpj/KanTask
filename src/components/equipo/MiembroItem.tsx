@@ -1,7 +1,8 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge, BadgeEnVivo } from '@/components/ui/Badge';
+import { Icono } from '@/components/ui/Icono';
 import { Colores, Espacio, Radio } from '@/constants/colores';
 import { ROLES } from '@/constants/estados';
 import type { Usuario } from '@/types/modelos';
@@ -9,13 +10,18 @@ import type { Usuario } from '@/types/modelos';
 type Props = {
   usuario: Usuario;
   tareas: number;
+  // Solo se pasa cuando quien mira es editor (abre "Cambiar rol")
+  onPress?: () => void;
 };
 
-export function MiembroItem({ usuario, tareas }: Props) {
+export function MiembroItem({ usuario, tareas, onPress }: Props) {
   const rol = ROLES[usuario.rol];
 
   return (
-    <View style={styles.fila}>
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress}
+      style={({ pressed }) => [styles.fila, pressed && styles.presionada]}>
       <Avatar nombre={usuario.nombre} tamano={40} />
       <View style={styles.info}>
         <Text style={styles.nombre}>{usuario.nombre}</Text>
@@ -32,7 +38,8 @@ export function MiembroItem({ usuario, tareas }: Props) {
         <Text style={styles.numero}>{tareas}</Text>
         <Text style={styles.textoTenue}>tareas</Text>
       </View>
-    </View>
+      {onPress && <Icono nombre="siguiente" tamano={14} color={Colores.textoTenue} />}
+    </Pressable>
   );
 }
 
@@ -46,6 +53,9 @@ const styles = StyleSheet.create({
     borderRadius: Radio.md,
     borderWidth: 1,
     borderColor: Colores.borde,
+  },
+  presionada: {
+    opacity: 0.8,
   },
   info: {
     flex: 1,

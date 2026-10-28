@@ -4,13 +4,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Columna } from '@/components/kanban/Columna';
 import { TarjetaTarea } from '@/components/kanban/TarjetaTarea';
-import { Avatar } from '@/components/ui/Avatar';
-import { BadgeEnVivo } from '@/components/ui/Badge';
 import { Boton } from '@/components/ui/Boton';
 import { Encabezado } from '@/components/ui/Encabezado';
 import { Icono } from '@/components/ui/Icono';
-import { Colores, Espacio, Radio } from '@/constants/colores';
-import { CHECKLIST, TAREAS, USUARIO_ACTUAL, USUARIOS } from '@/constants/datos-demo';
+import { Colores, Espacio } from '@/constants/colores';
+import { CHECKLIST, TAREAS } from '@/constants/datos-demo';
 import { COLUMNAS } from '@/constants/estados';
 
 // Pantalla 2 · Tablero Kanban
@@ -27,26 +25,6 @@ export default function Tablero() {
       />
 
       <ScrollView contentContainerStyle={styles.contenido}>
-        <View style={styles.sprint}>
-          <View style={styles.sprintFila}>
-            <View>
-              <Text style={styles.sprintEtiqueta}>SPRINT ACTIVO</Text>
-              <Text style={styles.sprintTitulo}>{USUARIO_ACTUAL.turno} · 20 – 31 oct</Text>
-            </View>
-            <BadgeEnVivo texto="En curso" />
-          </View>
-          <View style={styles.sprintFila}>
-            <Text style={styles.sprintLider}>Líder del equipo · {USUARIO_ACTUAL.nombre}</Text>
-            <View style={styles.avatares}>
-              {USUARIOS.slice(0, 4).map((u, i) => (
-                <View key={u.id} style={i > 0 && styles.avatarSolapado}>
-                  <Avatar nombre={u.nombre} tamano={28} borde={Colores.marino} />
-                </View>
-              ))}
-            </View>
-          </View>
-        </View>
-
         <View style={styles.resumen}>
           <Text style={styles.resumenTitulo}>Tareas · {TAREAS.length}</Text>
           <Text style={styles.resumenAyuda}>Deslizar columnas →</Text>
@@ -99,39 +77,6 @@ const styles = StyleSheet.create({
   contenido: {
     paddingBottom: 96,
     gap: Espacio.lg,
-  },
-  sprint: {
-    marginHorizontal: Espacio.lg,
-    padding: Espacio.lg,
-    borderRadius: Radio.lg,
-    backgroundColor: Colores.marino,
-    gap: Espacio.md,
-  },
-  sprintFila: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  sprintEtiqueta: {
-    fontSize: 11,
-    letterSpacing: 1,
-    color: '#A9B8C7',
-  },
-  sprintTitulo: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  sprintLider: {
-    flex: 1,
-    fontSize: 12,
-    color: '#C9D4DF',
-  },
-  avatares: {
-    flexDirection: 'row',
-  },
-  avatarSolapado: {
-    marginLeft: -8,
   },
   resumen: {
     flexDirection: 'row',

@@ -3,7 +3,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { AppState } from 'react-native';
 
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
-const clave = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+const clave = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? process.env.EXPO_PUBLIC_SUPABASE_KEY;
 
 // Mientras no existan las variables en .env.local la app funciona en modo demo (sin backend)
 export const supabase: SupabaseClient | null =

@@ -1,22 +1,33 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ModalEditarPerfil } from '@/components/perfil/ModalEditarPerfil';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { Boton } from '@/components/ui/Boton';
 import { Encabezado } from '@/components/ui/Encabezado';
 import { Icono, type NombreIcono } from '@/components/ui/Icono';
 import { Colores, Espacio, Radio } from '@/constants/colores';
-import { USUARIO_ACTUAL } from '@/constants/datos-demo';
 import { ROLES } from '@/constants/estados';
+import { useEquipo } from '@/lib/equipo';
+import { useSesion } from '@/lib/sesion';
+import type { Usuario } from '@/types/modelos';
 
 // Pantalla 6 · Perfil
 export default function Perfil() {
   const [notificaciones, setNotificaciones] = useState(true);
-  const usuario = USUARIO_ACTUAL;
-  const rol = ROLES[usuario.rol];
+  const [editando, setEditando] = useState(false);
+  const [correoPendiente, setCorreoPendiente] = useState('');
+  const { cerrarSesion, modoDemo } = useSesion();
+  const { actual: usuario, cargando, error, recargar } = useEquipo();
+
+  // Con sesión real, el Stack.Protected vuelve al login al cerrar sesión
+  const salir = async () => {
+    await cerrarSesion();
+    if (modoDemo) router.replace('/');
+  };
 
   return (
     <SafeAreaView edges={['top']} style={styles.pantalla}>
@@ -24,30 +35,36 @@ export default function Perfil() {
         titulo="Perfil"
         subtitulo="Cuenta y preferencias"
         accion={
-          <View style={styles.botonEditar}>
+          <Pressable style={styles.botonEditar} onPress={() => setEditando(true)} disabled={!usuario} hitSlop={8}>
             <Icono nombre="editar" tamano={16} />
-          </View>
+          </Pressable>
         }
       />
 
       <ScrollView contentContainerStyle={styles.contenido}>
-        <View style={styles.tarjetaUsuario}>
-          <Avatar nombre={usuario.nombre} tamano={60} />
-          <View style={styles.usuarioInfo}>
-            <Text style={styles.nombre}>{usuario.nombre}</Text>
-            <Text style={styles.cargo}>{usuario.cargo}</Text>
-            <View style={styles.badges}>
-              <Badge texto={`${usuario.turno} · KanTask`} color="#FFFFFF" fondo={Colores.marinoClaro} punto />
-              <Badge texto={rol.etiqueta} color={rol.color} fondo={rol.fondo} />
-            </View>
+        {!usuario ? (
+          <View style={styles.cargando}>
+            {cargando ? (
+              <ActivityIndicator color={Colores.primario} />
+            ) : (
+              <Text style={styles.error}>{error || 'No se encontró tu perfil'}</Text>
+            )}
           </View>
-        </View>
+        ) : (
+          <TarjetaUsuario usuario={usuario} />
+        )}
 
         <View style={styles.grupo}>
-          <Dato icono="correo" etiqueta="Correo electrónico" valor={usuario.correo} />
+          <Dato icono="correo" etiqueta="Correo electrónico" valor={usuario?.correo ?? '—'} />
           <View style={styles.separador} />
-          <Dato icono="telefono" etiqueta="Teléfono" valor={usuario.telefono ?? '—'} />
+          <Dato icono="telefono" etiqueta="Teléfono" valor={usuario?.telefono ?? '—'} />
         </View>
+
+        {correoPendiente ? (
+          <Text style={styles.aviso}>
+            Te enviamos un enlace a {correoPendiente}. Tu correo cambiará cuando lo confirmes.
+          </Text>
+        ) : null}
 
         <Text style={styles.seccion}>AJUSTES PRINCIPALES</Text>
         <View style={styles.grupo}>
@@ -67,9 +84,43 @@ export default function Perfil() {
           <Ajuste icono="idioma" titulo="Idioma" detalle="Español" />
         </View>
 
-        <Boton titulo="Cerrar sesión" icono="salir" variante="peligro" onPress={() => router.replace('/')} />
+        <Boton titulo="Cerrar sesión" icono="salir" variante="peligro" onPress={salir} />
       </ScrollView>
+
+      {usuario && (
+        <ModalEditarPerfil
+          visible={editando}
+          usuario={usuario}
+          onCerrar={() => setEditando(false)}
+          onGuardado={(_actualizado, pendiente) => {
+            recargar();
+            if (pendiente) setCorreoPendiente(pendiente);
+          }}
+        />
+      )}
     </SafeAreaView>
+  );
+}
+
+function TarjetaUsuario({ usuario }: { usuario: Usuario }) {
+  const rol = ROLES[usuario.rol];
+  return (
+    <View style={styles.tarjetaUsuario}>
+      <Avatar nombre={usuario.nombre} tamano={60} />
+      <View style={styles.usuarioInfo}>
+        <Text style={styles.nombre}>{usuario.nombre}</Text>
+        {usuario.cargo ? <Text style={styles.cargo}>{usuario.cargo}</Text> : null}
+        <View style={styles.badges}>
+          <Badge
+            texto={usuario.turno ? `${usuario.turno} · KanTask` : 'KanTask'}
+            color="#FFFFFF"
+            fondo={Colores.marinoClaro}
+            punto
+          />
+          <Badge texto={rol.etiqueta} color={rol.color} fondo={rol.fondo} />
+        </View>
+      </View>
+    </View>
   );
 }
 
@@ -113,6 +164,20 @@ function Ajuste({
 }
 
 const styles = StyleSheet.create({
+  cargando: {
+    minHeight: 92,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  error: {
+    fontSize: 13,
+    color: Colores.peligro,
+  },
+  aviso: {
+    fontSize: 13,
+    color: Colores.textoSecundario,
+    paddingHorizontal: Espacio.xs,
+  },
   pantalla: {
     flex: 1,
     backgroundColor: Colores.fondo,

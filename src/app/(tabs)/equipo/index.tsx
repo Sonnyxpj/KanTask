@@ -1,17 +1,17 @@
-import { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { InvitacionItem } from '@/components/equipo/InvitacionItem';
 import { MiembroItem } from '@/components/equipo/MiembroItem';
-import { ModalInvitar } from '@/components/equipo/ModalInvitar';
+import { ModalRol } from '@/components/equipo/ModalRol';
 import { BadgeEnVivo, Chip } from '@/components/ui/Badge';
 import { Encabezado } from '@/components/ui/Encabezado';
 import { Icono } from '@/components/ui/Icono';
 import { Colores, Espacio, Radio } from '@/constants/colores';
-import { TAREAS, USUARIO_ACTUAL, USUARIOS } from '@/constants/datos-demo';
-import { cancelarInvitacion, listarInvitaciones } from '@/services/invitaciones';
-import type { Invitacion } from '@/types/modelos';
+import { useEquipo } from '@/lib/equipo';
+import { contarTareasPorUsuario } from '@/services/usuarios';
+import type { Usuario } from '@/types/modelos';
 
 const ORDEN = ['Por asignado', 'Por rol: Editor/Visualizador', 'En vivo'] as const;
 type Orden = (typeof ORDEN)[number];
@@ -20,31 +20,26 @@ type Orden = (typeof ORDEN)[number];
 export default function Equipo() {
   const [busqueda, setBusqueda] = useState('');
   const [orden, setOrden] = useState<Orden>('Por asignado');
-  const [invitando, setInvitando] = useState(false);
-  const [invitaciones, setInvitaciones] = useState<Invitacion[]>([]);
-  const puedeInvitar = USUARIO_ACTUAL.rol === 'editor';
+  const [editandoRol, setEditandoRol] = useState<Usuario | null>(null);
+  const [tareasPorUsuario, setTareasPorUsuario] = useState<Record<string, number>>({});
+  // Quién está en vivo lo calcula ProveedorEquipo con Realtime Presence
+  const { usuarios, actual, cargando, error, recargar } = useEquipo();
+  const esEditor = actual?.rol === 'editor';
 
-  useEffect(() => {
-    listarInvitaciones().then(setInvitaciones).catch(() => {});
-  }, []);
+  // Recargar cada vez que se abre la pestaña (p. ej. alguien nuevo se registró)
+  useFocusEffect(
+    useCallback(() => {
+      recargar();
+      contarTareasPorUsuario().then(setTareasPorUsuario).catch(() => {});
+    }, [recargar]),
+  );
 
-  const cancelar = (inv: Invitacion) =>
-    Alert.alert('Cancelar invitación', `¿Quitar la invitación de ${inv.nombre}?`, [
-      { text: 'No', style: 'cancel' },
-      {
-        text: 'Sí, cancelar',
-        style: 'destructive',
-        onPress: () =>
-          cancelarInvitacion(inv.id)
-            .then(() => setInvitaciones((l) => l.filter((i) => i.id !== inv.id)))
-            .catch((e: Error) => Alert.alert('Error', e.message)),
-      },
-    ]);
+  const tareasDe = (id: string) => tareasPorUsuario[id] ?? 0;
+  const totalTareas = Object.values(tareasPorUsuario).reduce((a, b) => a + b, 0);
+  const conectados = usuarios.filter((u) => u.enVivo).length;
+  const porcentajeConectado = usuarios.length ? Math.round((conectados / usuarios.length) * 100) : 0;
 
-  const tareasDe = (id: string) => TAREAS.filter((t) => t.asignadoA === id).length;
-  const conectados = USUARIOS.filter((u) => u.enVivo).length;
-
-  const miembros = USUARIOS.filter((u) => u.nombre.toLowerCase().includes(busqueda.toLowerCase()))
+  const miembros = usuarios.filter((u) => u.nombre.toLowerCase().includes(busqueda.toLowerCase()))
     .filter((u) => orden !== 'En vivo' || u.enVivo)
     .sort((a, b) =>
       orden === 'Por rol: Editor/Visualizador' ? a.rol.localeCompare(b.rol) : tareasDe(b.id) - tareasDe(a.id),
@@ -54,14 +49,7 @@ export default function Equipo() {
     <SafeAreaView edges={['top']} style={styles.pantalla}>
       <Encabezado
         titulo="Equipo en vivo"
-        subtitulo={`${USUARIO_ACTUAL.turno} · ${USUARIOS.length} integrantes`}
-        accion={
-          puedeInvitar && (
-            <Pressable onPress={() => setInvitando(true)} hitSlop={8} accessibilityLabel="Agregar integrante">
-              <Icono nombre="agregarPersona" color={Colores.textoSecundario} />
-            </Pressable>
-          )
-        }
+        subtitulo={[actual?.turno, `${usuarios.length} integrantes`].filter(Boolean).join(' · ')}
       />
 
       <ScrollView contentContainerStyle={styles.contenido} keyboardShouldPersistTaps="handled">
@@ -84,11 +72,11 @@ export default function Equipo() {
 
         <View style={styles.resumen}>
           <View style={styles.dato}>
-            <Text style={styles.datoNumero}>{TAREAS.length}</Text>
+            <Text style={styles.datoNumero}>{totalTareas}</Text>
             <Text style={styles.datoTexto}>Tareas asignadas</Text>
           </View>
           <View style={styles.dato}>
-            <Text style={styles.datoNumero}>{Math.round((conectados / USUARIOS.length) * 100)}%</Text>
+            <Text style={styles.datoNumero}>{porcentajeConectado}%</Text>
             <Text style={styles.datoTexto}>Equipo conectado</Text>
           </View>
           <BadgeEnVivo texto="Sinc. en vivo" />
@@ -96,28 +84,27 @@ export default function Equipo() {
 
         <Text style={styles.seccion}>MIEMBROS DEL EQUIPO</Text>
         <View style={styles.lista}>
-          {miembros.map((u) => (
-            <MiembroItem key={u.id} usuario={u} tareas={tareasDe(u.id)} />
-          ))}
+          {cargando ? (
+            <ActivityIndicator color={Colores.primario} />
+          ) : error ? (
+            <Text style={styles.error}>{error}</Text>
+          ) : miembros.length === 0 ? (
+            <Text style={styles.vacio}>No hay integrantes que coincidan con la búsqueda</Text>
+          ) : (
+            miembros.map((u) => (
+              <MiembroItem
+                key={u.id}
+                usuario={u}
+                tareas={tareasDe(u.id)}
+                // Un editor puede cambiar el rol de los demás, no el suyo
+                onPress={esEditor && u.id !== actual?.id ? () => setEditandoRol(u) : undefined}
+              />
+            ))
+          )}
         </View>
-
-        {invitaciones.length > 0 && (
-          <>
-            <Text style={styles.seccion}>INVITACIONES PENDIENTES</Text>
-            <View style={styles.lista}>
-              {invitaciones.map((inv) => (
-                <InvitacionItem key={inv.id} invitacion={inv} onCancelar={puedeInvitar ? () => cancelar(inv) : undefined} />
-              ))}
-            </View>
-          </>
-        )}
       </ScrollView>
 
-      <ModalInvitar
-        visible={invitando}
-        onCerrar={() => setInvitando(false)}
-        onInvitado={(inv) => setInvitaciones((l) => [inv, ...l])}
-      />
+      <ModalRol usuario={editandoRol} onCerrar={() => setEditandoRol(null)} onCambiado={recargar} />
     </SafeAreaView>
   );
 }
@@ -184,5 +171,13 @@ const styles = StyleSheet.create({
   lista: {
     paddingHorizontal: Espacio.lg,
     gap: Espacio.sm,
+  },
+  error: {
+    fontSize: 13,
+    color: Colores.peligro,
+  },
+  vacio: {
+    fontSize: 13,
+    color: Colores.textoSecundario,
   },
 });

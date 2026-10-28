@@ -4,8 +4,8 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { Icono } from '@/components/ui/Icono';
 import { Colores, Espacio, Radio } from '@/constants/colores';
-import { buscarUsuario } from '@/constants/datos-demo';
 import { PRIORIDADES } from '@/constants/estados';
+import { useEquipo } from '@/lib/equipo';
 import type { Tarea } from '@/types/modelos';
 
 type Props = {
@@ -17,6 +17,7 @@ type Props = {
 
 export function TarjetaTarea({ tarea, completadas, total, onPress }: Props) {
   const prioridad = PRIORIDADES[tarea.prioridad];
+  const { buscarUsuario } = useEquipo();
   const responsable = buscarUsuario(tarea.asignadoA);
   const avance = total > 0 ? completadas / total : 0;
 

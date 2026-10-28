@@ -1,24 +1,6 @@
 // Datos de ejemplo para maquetar las pantallas mientras no exista el backend (Supabase).
-import type { ChecklistItem, Evidencia, Tarea, Usuario } from '@/types/modelos';
-
-export const USUARIO_ACTUAL: Usuario = {
-  id: 'u1',
-  nombre: 'Benjamín Garrido',
-  correo: 'benjamin@kantask.dev',
-  rol: 'editor',
-  turno: 'Sprint 4',
-  enVivo: true,
-  cargo: 'Líder técnico',
-  telefono: '+56 9 1234 5678',
-};
-
-export const USUARIOS: Usuario[] = [
-  USUARIO_ACTUAL,
-  { id: 'u2', nombre: 'Iván Sánchez', correo: 'ivan@kantask.dev', rol: 'editor', turno: 'Sprint 4', enVivo: true, cargo: 'Backend' },
-  { id: 'u3', nombre: 'Camila Rojas', correo: 'camila@kantask.dev', rol: 'editor', turno: 'Sprint 4', enVivo: true, cargo: 'Frontend' },
-  { id: 'u4', nombre: 'Matías Pérez', correo: 'matias@kantask.dev', rol: 'visualizador', turno: 'Sprint 4', enVivo: false, cargo: 'Product owner' },
-  { id: 'u5', nombre: 'Valentina Soto', correo: 'valentina@kantask.dev', rol: 'editor', turno: 'Sprint 4', enVivo: true, cargo: 'QA' },
-];
+// Los usuarios ya vienen de Supabase (ver src/lib/equipo.tsx).
+import type { ChecklistItem, Evidencia, Tarea } from '@/types/modelos';
 
 export const TAREAS: Tarea[] = [
   {
@@ -116,10 +98,6 @@ export const ACTIVIDAD: Actividad[] = [
   { id: 'a4', tipo: 'completada', texto: 'Modelo de datos en draw.io completada', usuarioId: 'u2', hace: 'Hace 1 hora', accion: 'Ver detalles', tareaId: 't5' },
   { id: 'a5', tipo: 'mencion', texto: 'Camila te mencionó en Diseñar pantalla de perfil', usuarioId: 'u3', hace: 'Hace 2 horas', accion: 'Responder', tareaId: 't2' },
 ];
-
-export function buscarUsuario(id: string) {
-  return USUARIOS.find((u) => u.id === id);
-}
 
 export function iniciales(nombre: string) {
   return nombre
