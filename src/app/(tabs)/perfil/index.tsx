@@ -1,8 +1,9 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ModalContrasena } from '@/components/perfil/ModalContrasena';
 import { ModalEditarPerfil } from '@/components/perfil/ModalEditarPerfil';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
@@ -12,14 +13,17 @@ import { Icono, type NombreIcono } from '@/components/ui/Icono';
 import { Colores, Espacio, Radio } from '@/constants/colores';
 import { ROLES } from '@/constants/estados';
 import { useEquipo } from '@/lib/equipo';
+import { cambiarNotificaciones, notificacionesActivas } from '@/lib/notificaciones';
 import { useSesion } from '@/lib/sesion';
 import type { Usuario } from '@/types/modelos';
 
 // Pantalla 6 · Perfil
 export default function Perfil() {
-  const [notificaciones, setNotificaciones] = useState(true);
+  const [notificaciones, setNotificaciones] = useState(notificacionesActivas);
   const [editando, setEditando] = useState(false);
+  const [cambiandoContrasena, setCambiandoContrasena] = useState(false);
   const [correoPendiente, setCorreoPendiente] = useState('');
+  const [aviso, setAviso] = useState('');
   const { cerrarSesion, modoDemo } = useSesion();
   const { actual: usuario, cargando, error, recargar } = useEquipo();
 
@@ -27,6 +31,18 @@ export default function Perfil() {
   const salir = async () => {
     await cerrarSesion();
     if (modoDemo) router.replace('/');
+  };
+
+  // Guarda la preferencia; al activar pide permiso al sistema
+  const alternarNotificaciones = async (activar: boolean) => {
+    setNotificaciones(activar);
+    const activas = await cambiarNotificaciones(activar);
+    setNotificaciones(activas);
+    setAviso(
+      activar && !activas
+        ? 'Permite las notificaciones de KanTask en los ajustes del teléfono para recibir avisos.'
+        : '',
+    );
   };
 
   return (
@@ -60,6 +76,8 @@ export default function Perfil() {
           <Dato icono="telefono" etiqueta="Teléfono" valor={usuario?.telefono ?? '—'} />
         </View>
 
+        {aviso ? <Text style={styles.aviso}>{aviso}</Text> : null}
+
         {correoPendiente ? (
           <Text style={styles.aviso}>
             Te enviamos un enlace a {correoPendiente}. Tu correo cambiará cuando lo confirmes.
@@ -68,24 +86,49 @@ export default function Perfil() {
 
         <Text style={styles.seccion}>AJUSTES PRINCIPALES</Text>
         <View style={styles.grupo}>
-          <Ajuste icono="actividad" titulo="Notificaciones" detalle="Tareas asignadas y cambios de estado">
+          <Ajuste
+            icono="actividad"
+            titulo="Notificaciones"
+            detalle={
+              Platform.OS === 'web'
+                ? 'Disponibles en la app de iOS y Android'
+                : 'Asignaciones, menciones y tareas por vencer'
+            }>
             <Switch
               value={notificaciones}
-              onValueChange={setNotificaciones}
+              onValueChange={alternarNotificaciones}
+              disabled={Platform.OS === 'web'}
               trackColor={{ true: Colores.primario, false: Colores.borde }}
               thumbColor="#FFFFFF"
             />
           </Ajuste>
           <View style={styles.separador} />
-          <Ajuste icono="seguridad" titulo="Seguridad y acceso" detalle="Contraseña y verificación" />
+          <Ajuste
+            icono="seguridad"
+            titulo="Seguridad y acceso"
+            detalle="Cambiar contraseña"
+            onPress={modoDemo ? undefined : () => setCambiandoContrasena(true)}
+          />
           <View style={styles.separador} />
-          <Ajuste icono="equipo" titulo="Configuración de equipo" detalle="Integrantes y roles del tablero" />
+          <Ajuste
+            icono="equipo"
+            titulo="Configuración de equipo"
+            detalle="Integrantes y roles del tablero"
+            onPress={() => router.navigate('/equipo')}
+          />
           <View style={styles.separador} />
-          <Ajuste icono="idioma" titulo="Idioma" detalle="Español" />
+          {/* Por ahora la app solo está en español: fila informativa, sin acción */}
+          <Ajuste icono="idioma" titulo="Idioma" detalle="Español (único idioma disponible)" />
         </View>
 
         <Boton titulo="Cerrar sesión" icono="salir" variante="peligro" onPress={salir} />
       </ScrollView>
+
+      <ModalContrasena
+        visible={cambiandoContrasena}
+        onCerrar={() => setCambiandoContrasena(false)}
+        onCambiada={() => setAviso('Tu contraseña se cambió correctamente.')}
+      />
 
       {usuario && (
         <ModalEditarPerfil
@@ -142,15 +185,20 @@ function Ajuste({
   icono,
   titulo,
   detalle,
+  onPress,
   children,
 }: {
   icono: NombreIcono;
   titulo: string;
   detalle: string;
+  onPress?: () => void;
   children?: React.ReactNode;
 }) {
   return (
-    <Pressable style={styles.fila}>
+    <Pressable
+      style={({ pressed }) => [styles.fila, pressed && onPress && { opacity: 0.7 }]}
+      onPress={onPress}
+      disabled={!onPress}>
       <View style={styles.iconoCaja}>
         <Icono nombre={icono} tamano={16} color={Colores.texto} />
       </View>
@@ -158,7 +206,7 @@ function Ajuste({
         <Text style={styles.valor}>{titulo}</Text>
         <Text style={styles.etiqueta}>{detalle}</Text>
       </View>
-      {children ?? <Icono nombre="siguiente" tamano={14} color={Colores.textoTenue} />}
+      {children ?? (onPress ? <Icono nombre="siguiente" tamano={14} color={Colores.textoTenue} /> : null)}
     </Pressable>
   );
 }

@@ -1,6 +1,7 @@
+import * as Linking from 'expo-linking';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { MiembroItem } from '@/components/equipo/MiembroItem';
@@ -10,7 +11,7 @@ import { Encabezado } from '@/components/ui/Encabezado';
 import { Icono } from '@/components/ui/Icono';
 import { Colores, Espacio, Radio } from '@/constants/colores';
 import { useEquipo } from '@/lib/equipo';
-import { contarTareasPorUsuario } from '@/services/usuarios';
+import { useTablero } from '@/lib/tablero';
 import type { Usuario } from '@/types/modelos';
 
 const ORDEN = ['Por asignado', 'Por rol: Editor/Visualizador', 'En vivo'] as const;
@@ -21,25 +22,40 @@ export default function Equipo() {
   const [busqueda, setBusqueda] = useState('');
   const [orden, setOrden] = useState<Orden>('Por asignado');
   const [editandoRol, setEditandoRol] = useState<Usuario | null>(null);
-  const [tareasPorUsuario, setTareasPorUsuario] = useState<Record<string, number>>({});
   // Quién está en vivo lo calcula ProveedorEquipo con Realtime Presence
   const { usuarios, actual, cargando, error, recargar } = useEquipo();
   const esEditor = actual?.rol === 'editor';
+  // Tareas asignadas a cada integrante, sincronizadas en vivo con el tablero
+  const { tareas } = useTablero();
+  const tareasPorUsuario = tareas.reduce<Record<string, number>>((acc, t) => {
+    if (t.asignadoA) acc[t.asignadoA] = (acc[t.asignadoA] ?? 0) + 1;
+    return acc;
+  }, {});
 
   // Recargar cada vez que se abre la pestaña (p. ej. alguien nuevo se registró)
   useFocusEffect(
     useCallback(() => {
       recargar();
-      contarTareasPorUsuario().then(setTareasPorUsuario).catch(() => {});
     }, [recargar]),
   );
+
+  const invitar = () => {
+    const enlace = Linking.createURL('/registro');
+    Share.share({
+      title: 'Únete a KanTask',
+      message:
+        `${actual?.nombre ?? 'Tu equipo'} te invita al tablero de KanTask. ` +
+        `Crea tu cuenta aquí: ${enlace}\n\nCuando te registres, un editor te asignará tu rol.`,
+    }).catch(() => {});
+  };
 
   const tareasDe = (id: string) => tareasPorUsuario[id] ?? 0;
   const totalTareas = Object.values(tareasPorUsuario).reduce((a, b) => a + b, 0);
   const conectados = usuarios.filter((u) => u.enVivo).length;
   const porcentajeConectado = usuarios.length ? Math.round((conectados / usuarios.length) * 100) : 0;
 
-  const miembros = usuarios.filter((u) => u.nombre.toLowerCase().includes(busqueda.toLowerCase()))
+  const miembros = usuarios
+    .filter((u) => u.nombre.toLowerCase().includes(busqueda.toLowerCase()))
     .filter((u) => orden !== 'En vivo' || u.enVivo)
     .sort((a, b) =>
       orden === 'Por rol: Editor/Visualizador' ? a.rol.localeCompare(b.rol) : tareasDe(b.id) - tareasDe(a.id),
@@ -50,6 +66,15 @@ export default function Equipo() {
       <Encabezado
         titulo="Equipo en vivo"
         subtitulo={[actual?.turno, `${usuarios.length} integrantes`].filter(Boolean).join(' · ')}
+        accion={
+          // Agregar integrante: se comparte el enlace de registro; la cuenta nueva entra como
+          // Visualizador y un editor le cambia el rol desde esta misma lista
+          esEditor ? (
+            <Pressable onPress={invitar} hitSlop={8} style={styles.botonInvitar}>
+              <Icono nombre="agregarPersona" tamano={18} />
+            </Pressable>
+          ) : undefined
+        }
       />
 
       <ScrollView contentContainerStyle={styles.contenido} keyboardShouldPersistTaps="handled">
@@ -110,6 +135,16 @@ export default function Equipo() {
 }
 
 const styles = StyleSheet.create({
+  botonInvitar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: Colores.borde,
+    backgroundColor: Colores.superficie,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   pantalla: {
     flex: 1,
     backgroundColor: Colores.fondo,

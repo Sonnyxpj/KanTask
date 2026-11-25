@@ -21,8 +21,10 @@ export function Checklist({ items, onToggle }: Props) {
         </Text>
       </View>
 
+      {items.length === 0 && <Text style={styles.vacio}>Esta tarea no tiene ítems en el checklist</Text>}
+
       {items.map((item) => (
-        <Pressable key={item.id} onPress={() => onToggle?.(item.id)} style={styles.item}>
+        <Pressable key={item.id} onPress={() => onToggle?.(item.id)} disabled={!onToggle} style={styles.item}>
           <View style={[styles.casilla, item.completado && styles.casillaMarcada]}>
             {item.completado && <Icono nombre="check" tamano={12} color="#FFFFFF" />}
           </View>
@@ -79,6 +81,10 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     color: Colores.texto,
+  },
+  vacio: {
+    fontSize: 13,
+    color: Colores.textoTenue,
   },
   textoTachado: {
     color: Colores.textoTenue,

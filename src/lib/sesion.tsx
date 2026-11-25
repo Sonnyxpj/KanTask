@@ -14,6 +14,7 @@ type ContextoSesion = {
   cerrarSesion: () => Promise<void>;
   enviarCodigoRecuperacion: (correo: string) => Promise<Resultado>;
   restablecerContrasena: (correo: string, codigo: string, nueva: string) => Promise<Resultado>;
+  cambiarContrasena: (actual: string, nueva: string) => Promise<Resultado>;
 };
 
 const Contexto = createContext<ContextoSesion | null>(null);
@@ -32,7 +33,8 @@ function traducirError(error: AuthError): string {
   if (mensaje.includes('already registered')) return 'Ya existe una cuenta con ese correo';
   if (mensaje.includes('password should be')) return 'La contraseña debe tener al menos 6 caracteres';
   if (mensaje.includes('invalid') && mensaje.includes('email')) return 'El correo no es válido';
-  if (mensaje.includes('rate limit') || mensaje.includes('security purposes')) return 'Demasiados intentos, espera un momento';
+  if (mensaje.includes('rate limit') || mensaje.includes('security purposes'))
+    return 'Demasiados intentos, espera un momento';
   if (mensaje.includes('token has expired') || mensaje.includes('otp')) return 'El código es incorrecto o ya expiró';
   if (mensaje.includes('error sending')) return 'No se pudo enviar el correo. Intenta de nuevo más tarde';
   if (mensaje.includes('different from the old')) return 'La nueva contraseña debe ser distinta a la anterior';
@@ -93,7 +95,11 @@ export function ProveedorSesion({ children }: PropsWithChildren) {
     if (!supabase) return { error: SIN_BACKEND };
     recuperando.current = true;
     try {
-      const verificacion = await supabase.auth.verifyOtp({ email: correo.trim(), token: codigo.trim(), type: 'recovery' });
+      const verificacion = await supabase.auth.verifyOtp({
+        email: correo.trim(),
+        token: codigo.trim(),
+        type: 'recovery',
+      });
       if (verificacion.error) return { error: traducirError(verificacion.error) };
 
       const cambio = await supabase.auth.updateUser({ password: nueva });
@@ -109,6 +115,21 @@ export function ProveedorSesion({ children }: PropsWithChildren) {
     }
   };
 
+  // Desde Perfil → Seguridad y acceso: se confirma la contraseña actual antes de cambiarla
+  const cambiarContrasena = async (actual: string, nueva: string): Promise<Resultado> => {
+    if (!supabase) return { error: SIN_BACKEND };
+    const correo = sesion?.user.email;
+    if (!correo) return { error: 'No hay una sesión activa' };
+
+    const verificacion = await supabase.auth.signInWithPassword({ email: correo, password: actual });
+    if (verificacion.error) {
+      const mensaje = traducirError(verificacion.error);
+      return { error: mensaje === 'Correo o contraseña incorrectos' ? 'La contraseña actual no es correcta' : mensaje };
+    }
+    const { error } = await supabase.auth.updateUser({ password: nueva });
+    return error ? { error: traducirError(error) } : {};
+  };
+
   return (
     <Contexto.Provider
       value={{
@@ -120,6 +141,7 @@ export function ProveedorSesion({ children }: PropsWithChildren) {
         cerrarSesion,
         enviarCodigoRecuperacion,
         restablecerContrasena,
+        cambiarContrasena,
       }}>
       {children}
     </Contexto.Provider>

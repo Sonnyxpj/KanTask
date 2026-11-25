@@ -6,6 +6,7 @@ import { Icono } from '@/components/ui/Icono';
 import { Colores, Espacio, Radio } from '@/constants/colores';
 import { PRIORIDADES } from '@/constants/estados';
 import { useEquipo } from '@/lib/equipo';
+import { estaVencida, formatearFecha } from '@/lib/fechas';
 import type { Tarea } from '@/types/modelos';
 
 type Props = {
@@ -13,16 +14,24 @@ type Props = {
   completadas: number;
   total: number;
   onPress?: () => void;
+  // Solo se pasa a los editores (abre "Mover a…")
+  onLongPress?: () => void;
 };
 
-export function TarjetaTarea({ tarea, completadas, total, onPress }: Props) {
+export function TarjetaTarea({ tarea, completadas, total, onPress, onLongPress }: Props) {
   const prioridad = PRIORIDADES[tarea.prioridad];
   const { buscarUsuario } = useEquipo();
   const responsable = buscarUsuario(tarea.asignadoA);
   const avance = total > 0 ? completadas / total : 0;
+  const vencida = tarea.estado !== 'terminado' && estaVencida(tarea.fechaLimite);
+  const colorFecha = vencida ? Colores.peligro : Colores.textoSecundario;
 
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.tarjeta, pressed && styles.presionada]}>
+    <Pressable
+      onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={350}
+      style={({ pressed }) => [styles.tarjeta, pressed && styles.presionada]}>
       <View style={styles.fila}>
         <Badge texto={prioridad.etiqueta} color={prioridad.color} fondo={prioridad.fondo} />
         {responsable && <Avatar nombre={responsable.nombre} tamano={26} />}
@@ -33,8 +42,11 @@ export function TarjetaTarea({ tarea, completadas, total, onPress }: Props) {
       </Text>
 
       <View style={styles.fecha}>
-        <Icono nombre="calendario" tamano={12} color={Colores.textoSecundario} />
-        <Text style={styles.textoTenue}>{tarea.fechaLimite}</Text>
+        <Icono nombre="calendario" tamano={12} color={colorFecha} />
+        <Text style={[styles.textoTenue, { color: colorFecha }]}>
+          {formatearFecha(tarea.fechaLimite)}
+          {vencida ? ' · Vencida' : ''}
+        </Text>
       </View>
 
       <View style={styles.barra}>

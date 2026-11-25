@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/ui/Avatar';
@@ -26,12 +26,16 @@ export function ModalRol({ usuario, onCerrar, onCambiado }: Props) {
   const [error, setError] = useState('');
   const [enviando, setEnviando] = useState(false);
 
-  useEffect(() => {
+  // Al abrir con otro integrante, partir desde su rol actual (ajuste durante el render,
+  // recomendado por React en lugar de setState dentro de un efecto)
+  const [usuarioPrevio, setUsuarioPrevio] = useState<Usuario | null>(null);
+  if (usuario !== usuarioPrevio) {
+    setUsuarioPrevio(usuario);
     if (usuario) {
       setRol(usuario.rol);
       setError('');
     }
-  }, [usuario]);
+  }
 
   const guardar = async () => {
     if (!usuario) return;

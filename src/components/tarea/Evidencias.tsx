@@ -1,8 +1,10 @@
 import { Image } from 'expo-image';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Icono } from '@/components/ui/Icono';
 import { Colores, Espacio, Radio } from '@/constants/colores';
+import { firmarEvidencias } from '@/services/tareas';
 import type { Evidencia } from '@/types/modelos';
 
 type Props = {
@@ -11,7 +13,29 @@ type Props = {
   onAgregar?: () => void;
 };
 
+// El bucket "evidencias" es privado: las fotos se muestran con URLs firmadas temporales
+function useUrlsFirmadas(rutas: string[]) {
+  const [urls, setUrls] = useState<Record<string, string>>({});
+  const [error, setError] = useState('');
+  const clave = rutas.join('|');
+
+  useEffect(() => {
+    let vigente = true;
+    if (!clave) return;
+    firmarEvidencias(clave.split('|'))
+      .then((r) => vigente && (setUrls(r), setError('')))
+      .catch((e: Error) => vigente && setError(e.message));
+    return () => {
+      vigente = false;
+    };
+  }, [clave]);
+
+  return { urls, error };
+}
+
 export function Evidencias({ fotos, puedeAgregar = true, onAgregar }: Props) {
+  const { urls, error } = useUrlsFirmadas(fotos.map((f) => f.urlFoto));
+
   return (
     <View style={styles.contenedor}>
       <View style={styles.encabezado}>
@@ -23,7 +47,7 @@ export function Evidencias({ fotos, puedeAgregar = true, onAgregar }: Props) {
 
       <View style={styles.grilla}>
         {fotos.map((foto) => (
-          <Image key={foto.id} source={foto.urlFoto} style={styles.foto} contentFit="cover" transition={200} />
+          <Image key={foto.id} source={urls[foto.urlFoto]} style={styles.foto} contentFit="cover" transition={200} />
         ))}
 
         {puedeAgregar && (
@@ -33,6 +57,7 @@ export function Evidencias({ fotos, puedeAgregar = true, onAgregar }: Props) {
           </Pressable>
         )}
       </View>
+      {error ? <Text style={styles.error}>{error}</Text> : null}
     </View>
   );
 }
@@ -79,6 +104,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: Espacio.xs,
+  },
+  error: {
+    fontSize: 12,
+    color: Colores.peligro,
   },
   agregarTexto: {
     fontSize: 11,

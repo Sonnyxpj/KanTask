@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -28,14 +28,15 @@ export function ModalEditarPerfil({ visible, usuario, onCerrar, onGuardado }: Pr
   const [errores, setErrores] = useState<Errores>({});
   const [enviando, setEnviando] = useState(false);
 
-  // Partir siempre desde los datos actuales al abrir
-  useEffect(() => {
+  // Partir siempre desde los datos actuales al abrir (ajuste durante el render)
+  const [visiblePrevio, setVisiblePrevio] = useState(visible);
+  if (visible !== visiblePrevio) {
+    setVisiblePrevio(visible);
     if (visible) {
       setValores(inicial());
       setErrores({});
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible]);
+  }
 
   const cambiar = (campo: keyof Valores, valor: string) => setValores((v) => ({ ...v, [campo]: valor }));
 

@@ -3,8 +3,10 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { Colores } from '@/constants/colores';
+import { ProveedorActividad } from '@/lib/actividad';
 import { ProveedorEquipo } from '@/lib/equipo';
 import { ProveedorSesion, useSesion } from '@/lib/sesion';
+import { ProveedorTablero } from '@/lib/tablero';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -13,8 +15,12 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <ProveedorSesion>
         <ProveedorEquipo>
-          <StatusBar style="dark" />
-          <Navegador />
+          <ProveedorTablero>
+            <ProveedorActividad>
+              <StatusBar style="dark" />
+              <Navegador />
+            </ProveedorActividad>
+          </ProveedorTablero>
         </ProveedorEquipo>
       </ProveedorSesion>
     </SafeAreaProvider>

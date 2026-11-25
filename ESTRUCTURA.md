@@ -1,94 +1,71 @@
-# KanTask — Estructura de `src/`
-
-Organización de la carpeta `src/` según el informe del proyecto: tablero Kanban con checklist, evidencia fotográfica, sincronización en tiempo real con Supabase y roles Editor / Visualizador.
+# KanTask — Estructura del proyecto
 
 ```
 src/
 ├── app/                              # PANTALLAS (Expo Router: cada archivo = una ruta)
-│   ├── _layout.tsx                   # Layout raíz: providers (Auth, Board) + SafeArea
-│   ├── index.tsx                     # Pantalla 1 · Login
-│   ├── camera.tsx                    # Cámara / galería para evidencia (modal)
+│   ├── _layout.tsx                   # Raíz: proveedores (Sesión → Equipo → Tablero → Actividad) + Stack protegido
+│   ├── index.tsx                     # Redirige a /tablero o /login según la sesión
+│   ├── login.tsx                     # Pantalla 1 · Login
+│   ├── registro.tsx                  # Crear cuenta (entra como Visualizador)
+│   ├── recuperar.tsx                 # Recuperar contraseña con código
+│   ├── camera.tsx                    # Cámara / galería para evidencia (modal, recibe ?tareaId=)
 │   └── (tabs)/                       # Barra inferior de pestañas
-│       ├── _layout.tsx               # Tabs: Tablero, Turnos/Equipo, Actividad, Perfil
+│       ├── _layout.tsx               # Tabs + insignia de no leídas + notificaciones
 │       ├── tablero/
 │       │   ├── _layout.tsx           # Stack del tablero
 │       │   ├── index.tsx             # Pantalla 2 · Tablero Kanban
-│       │   ├── nueva.tsx             # Formulario "Agregar tarea"
+│       │   ├── nueva.tsx             # Crear tarea (y editar con ?id=)
 │       │   └── [id].tsx              # Pantalla 3 · Detalle de tarea
 │       ├── actividad/index.tsx       # Pantalla 4 · Actividad en vivo
 │       ├── equipo/index.tsx          # Pantalla 5 · Equipo en vivo
 │       └── perfil/index.tsx          # Pantalla 6 · Perfil
 │
-├── components/                       # COMPONENTES DE UI reutilizables
-│   ├── kanban/
-│   │   ├── Columna.tsx               # Columna (Pendiente / En progreso / Terminado)
-│   │   └── TarjetaTarea.tsx          # Tarjeta con prioridad, fecha y avance
-│   ├── tarea/
-│   │   ├── FormTarea.tsx             # Formulario con validación de campos obligatorios
-│   │   ├── Checklist.tsx             # Lista de verificación de subtareas
-│   │   └── Evidencias.tsx            # Galería de fotos de cierre
-│   ├── equipo/
-│   │   ├── MiembroItem.tsx           # Fila de integrante con rol y estado
-│   │   ├── InvitacionItem.tsx        # Fila de invitación pendiente
-│   │   └── ModalInvitar.tsx          # Formulario "Agregar integrante"
-│   └── ui/                           # Botones, inputs, badges, etc.
+├── components/
+│   ├── kanban/                       # Columna, TarjetaTarea, ResumenTablero
+│   ├── tarea/                        # FormTarea, Checklist, Evidencias, Comentarios
+│   ├── equipo/                       # MiembroItem, ModalRol
+│   ├── perfil/                       # ModalEditarPerfil, ModalContrasena
+│   └── ui/                           # Boton, Campo, Badge, Avatar, Encabezado, Icono, Calendario, HojaAcciones
 │
-├── context/                          # ESTADO GLOBAL (Context API)
-│   ├── AuthContext.tsx               # Sesión del usuario y rol (editor / visualizador)
-│   └── BoardContext.tsx              # Estado del tablero, columnas y tareas
+├── lib/                              # ESTADO GLOBAL Y LÓGICA
+│   ├── supabase.ts                   # Cliente de Supabase (sesión persistente)
+│   ├── sesion.tsx                    # ProveedorSesion: login, registro, recuperar/cambiar contraseña
+│   ├── equipo.tsx                    # ProveedorEquipo: integrantes, rol actual, presencia en vivo
+│   ├── tablero.tsx                   # ProveedorTablero: tareas, checklist, evidencias, Realtime y offline
+│   ├── actividad.tsx                 # ProveedorActividad: feed en vivo, no leídas, avisos
+│   ├── notificaciones.ts             # Notificaciones locales y recordatorios de vencimiento
+│   ├── almacen.ts                    # Caché local (modo offline) y preferencias
+│   ├── fechas.ts                     # Formato y validación de fechas
+│   └── reglas.ts                     # Reglas de negocio puras (regla de cierre, texto de actividad)
 │
-├── hooks/
-│   ├── useRealtimeTareas.ts          # Suscripción en tiempo real de Supabase
-│   └── usePermisos.ts                # ¿Puede editar el usuario actual?
+├── services/                         # ACCESO A DATOS (Supabase)
+│   ├── tareas.ts                     # Tablero, tareas, checklist, evidencias (Storage)
+│   ├── actividad.ts                  # Actividad y comentarios
+│   └── usuarios.ts                   # Perfiles y roles
 │
-├── lib/
-│   ├── supabase.ts                   # Cliente de Supabase (sesión en AsyncStorage)
-│   └── offline.ts                    # Persistencia local con AsyncStorage (modo offline)
-│
-├── services/                         # ACCESO A DATOS (una tabla por archivo)
-│   ├── auth.ts                       # signIn, signUp, signOut
-│   ├── usuarios.ts                   # Usuario
-│   ├── invitaciones.ts               # Invitar integrantes al equipo con su rol
-│   ├── tableros.ts                   # Tablero
-│   ├── columnas.ts                   # Columna
-│   ├── tareas.ts                     # Tarea: crear, editar, mover de columna, borrar
-│   ├── checklist.ts                  # Checklist_Item
-│   └── evidencias.ts                 # Evidencia + subida de fotos a Supabase Storage
-│
-├── types/
-│   └── modelos.ts                    # Tipos TS del modelo de datos
-│
-└── constants/
-    ├── estados.ts                    # Columnas por defecto y prioridades
-    └── colores.ts                    # Paleta de la app
+├── __tests__/                        # Pruebas (Jest)
+├── types/modelos.ts                  # Tipos del modelo de datos
+└── constants/                        # colores.ts, estados.ts, datos-demo.ts
+
+supabase/
+├── schema.sql                        # Esquema completo (instalación nueva)
+└── migraciones/                      # Cambios para bases ya creadas
 ```
 
-## Pantallas (`app/`)
+## Modelo de datos
 
-| # | Pantalla | Ruta | Contenido |
-|---|---|---|---|
-| 1 | Login | `/` | Correo, contraseña, iniciar sesión |
-| 2 | Tablero Kanban | `/tablero` | Columnas Pendiente, En progreso y Terminado; botón "Agregar tarea" |
-| 3 | Detalle de tarea | `/tablero/[id]` | Título, descripción, responsable, checklist, prueba de finalización |
-| 4 | Actividad | `/actividad` | Filtros, tareas asignadas, actividad en vivo |
-| 5 | Equipo en vivo | `/equipo` | Buscador de miembros, rol asignado, lista de integrantes |
-| 6 | Perfil | `/perfil` | Datos del usuario, configuración, cerrar sesión |
-| — | Cámara | `/camera` | Tomar foto o elegir de galería y adjuntarla como evidencia |
-
-> La navegación se hace con **Expo Router**: las rutas se definen por archivos dentro de `src/app/`, los `_layout.tsx` definen los navegadores (Tabs y Stack) y se navega con `router`, `Link` y `useLocalSearchParams` importados desde `expo-router`.
-
-## Modelo de datos (`types/` + `services/`)
-
-| Entidad | Campos | Servicio |
+| Tabla | Campos principales | Notas |
 |---|---|---|
-| Usuario | id, nombre, correo, rol, turno, enVivo | `usuarios.ts` |
-| Tablero | id, nombre, equipo, usuario (FK) | `tableros.ts` |
-| Columna | id, tableroId (FK), nombre, orden | `columnas.ts` |
-| Tarea | id, columnaId (FK), asignadoA (FK), título, descripción, prioridad, fecha_límite, estado | `tareas.ts` |
-| Checklist_Item | id, tareaId (FK), descripción, completado | `checklist.ts` |
-| Evidencia | id, tareaId (FK), urlFoto, fecha | `evidencias.ts` |
+| `usuarios` | id, nombre, correo, rol, cargo, teléfono | Se crea con un trigger al registrarse |
+| `tableros` | id, nombre, equipo, usuario_id | El primer editor que entra crea el tablero |
+| `columnas` | id, tablero_id, nombre, orden | Pendiente (0), En progreso (1), Terminado (2), creadas por trigger |
+| `tareas` | id, columna_id, asignado_a, título, descripción, prioridad, fecha_límite, estado | `validar_cierre_tarea` exige checklist + foto para "terminado" |
+| `checklist_items` | id, tarea_id, descripción, completado, orden | |
+| `evidencias` | id, tarea_id, url_foto (ruta en Storage), fecha | Bucket privado `evidencias`, URLs firmadas |
+| `actividad` | id, tipo, texto, tarea_id, usuario_id, destinatario_id | La llenan los triggers |
+| `comentarios` | id, tarea_id, usuario_id, texto, menciones[] | Cada mención genera actividad "mencion" |
 
-El esquema SQL de estas tablas (con RLS por rol, Storage y Realtime) está en `supabase/schema.sql`, fuera de `src/`.
+**Permisos (RLS):** todos los usuarios autenticados leen. Solo los editores crean, editan, mueven y borran tareas, checklist y evidencias. Cualquiera comenta y solo borra sus propios comentarios.
 
 ## Flujo de datos
 
@@ -96,21 +73,19 @@ El esquema SQL de estas tablas (con RLS por rol, Storage y Realtime) está en `s
 Pantallas (app/) ─► Componentes (components/)
        │
        ▼
-Context API (context/) ◄──► AsyncStorage (lib/offline.ts)
-       │
-       ▼
+Proveedores (lib/*.tsx, Context API) ◄──► Caché local (lib/almacen.ts)
+       │                    ▲
+       ▼                    │ postgres_changes / presence (Realtime)
 Servicios (services/) ─► lib/supabase.ts ─► Supabase
-                                              ├─ Auth (sesión y roles)
-                                              ├─ Base de datos en tiempo real
+                                              ├─ Auth (sesión)
+                                              ├─ PostgreSQL + RLS + triggers
                                               └─ Storage (fotos de evidencia)
-       ▲
-       └── hooks/useRealtimeTareas.ts (cambios de otros dispositivos)
 ```
 
-## Carpetas por área de trabajo
+## Áreas de trabajo
 
-| Área (según el informe) | Carpetas a cargo |
+| Área | Carpetas |
 |---|---|
-| Frontend & UI/UX | `app/`, `components/`, `constants/colores.ts`, integración de cámara en `app/camera.tsx` |
-| Backend, Datos & Sincronización | `services/`, `lib/`, `context/`, `hooks/`, `types/`, `constants/estados.ts` |
-| Transversal / Todo el equipo | Revisión de código y pruebas sobre todo `src/` |
+| Frontend & UI/UX (Iván Sánchez) | `app/`, `components/`, `constants/colores.ts`, cámara |
+| Backend, Datos & Sincronización (Benjamín Garrido) | `services/`, `lib/`, `types/`, `supabase/` |
+| Transversal | Revisión de código y pruebas (`__tests__/`) |

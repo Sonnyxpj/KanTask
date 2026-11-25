@@ -24,7 +24,11 @@ const ICONOS = {
   checkCirculo: { ios: 'checkmark.circle', android: 'task_alt', web: 'task_alt' },
   camara: { ios: 'camera', android: 'photo_camera', web: 'photo_camera' },
   galeria: { ios: 'photo.on.rectangle', android: 'photo_library', web: 'photo_library' },
-  girarCamara: { ios: 'arrow.triangle.2.circlepath.camera', android: 'flip_camera_android', web: 'flip_camera_android' },
+  girarCamara: {
+    ios: 'arrow.triangle.2.circlepath.camera',
+    android: 'flip_camera_android',
+    web: 'flip_camera_android',
+  },
   flash: { ios: 'bolt', android: 'flash_on', web: 'flash_on' },
   cerrar: { ios: 'xmark', android: 'close', web: 'close' },
   buscar: { ios: 'magnifyingglass', android: 'search', web: 'search' },
@@ -39,6 +43,11 @@ const ICONOS = {
   intercambio: { ios: 'arrow.left.arrow.right', android: 'swap_horiz', web: 'swap_horiz' },
   documento: { ios: 'doc.text', android: 'assignment', web: 'assignment' },
   mensaje: { ios: 'bubble.left', android: 'chat_bubble', web: 'chat_bubble' },
+  basura: { ios: 'trash', android: 'delete', web: 'delete' },
+  reabrir: { ios: 'arrow.uturn.left', android: 'undo', web: 'undo' },
+  play: { ios: 'play', android: 'play_arrow', web: 'play_arrow' },
+  enviar: { ios: 'paperplane.fill', android: 'send', web: 'send' },
+  nube: { ios: 'icloud.slash', android: 'cloud_off', web: 'cloud_off' },
 } as const satisfies Record<string, SymbolViewProps['name']>;
 
 export type NombreIcono = keyof typeof ICONOS;

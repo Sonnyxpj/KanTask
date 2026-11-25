@@ -1,6 +1,8 @@
 import { createContext, use, useCallback, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
 import { AppState } from 'react-native';
 
+import { USUARIO_DEMO, USUARIOS } from '@/constants/datos-demo';
+import { Claves, guardar, leer } from '@/lib/almacen';
 import { useSesion } from '@/lib/sesion';
 import { supabase } from '@/lib/supabase';
 import { listarUsuarios } from '@/services/usuarios';
@@ -15,6 +17,8 @@ type ContextoEquipo = {
   recargar: () => Promise<void>;
 };
 
+const DEMO = !supabase;
+
 const Contexto = createContext<ContextoEquipo | null>(null);
 
 export function useEquipo() {
@@ -26,38 +30,48 @@ export function useEquipo() {
 // Integrantes del equipo (public.usuarios) + quién está conectado ahora (Realtime Presence)
 export function ProveedorEquipo({ children }: PropsWithChildren) {
   const { sesion } = useSesion();
-  const idUsuario = sesion?.user.id;
-  const [lista, setLista] = useState<Usuario[]>([]);
+  // Sin backend (modo demo) no hay sesión: se usa un Editor de ejemplo para poder probar todo
+  const idUsuario = DEMO ? USUARIO_DEMO : sesion?.user.id;
+  const [lista, setLista] = useState<Usuario[]>(DEMO ? USUARIOS : []);
   const [enLinea, setEnLinea] = useState<Set<string>>(new Set());
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
 
+  // Al iniciar o cerrar sesión se parte de cero (ajuste durante el render; null = primer render)
+  const [idPrevio, setIdPrevio] = useState<string | undefined | null>(null);
+  if (idPrevio !== idUsuario) {
+    setIdPrevio(idUsuario);
+    setLista(DEMO ? USUARIOS : []);
+    setEnLinea(new Set());
+    setError('');
+    setCargando(!DEMO && !!idUsuario);
+  }
+
   const recargar = useCallback(async () => {
-    if (!idUsuario) {
-      setLista([]);
-      setCargando(false);
-      return;
-    }
+    if (DEMO || !idUsuario) return;
     try {
-      setLista(await listarUsuarios());
+      const usuarios = await listarUsuarios();
+      setLista(usuarios);
       setError('');
+      guardar(Claves.equipo(idUsuario), usuarios);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'No se pudo cargar el equipo');
+      // Sin conexión: usar la última lista guardada (modo offline)
+      const guardados = leer<Usuario[]>(Claves.equipo(idUsuario));
+      if (guardados) setLista((actual) => (actual.length ? actual : guardados));
+      else setError(e instanceof Error ? e.message : 'No se pudo cargar el equipo');
     } finally {
       setCargando(false);
     }
   }, [idUsuario]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- carga asíncrona: el estado cambia después del await
     recargar();
   }, [recargar]);
 
   // Cada app con sesión se anuncia en el canal; la clave de presencia es el id del usuario
   useEffect(() => {
-    if (!supabase || !idUsuario) {
-      setEnLinea(new Set());
-      return;
-    }
+    if (!supabase || !idUsuario) return;
     const cliente = supabase;
     const canal = cliente.channel('equipo-en-vivo', { config: { presence: { key: idUsuario } } });
     let suscrito = false;
@@ -66,6 +80,8 @@ export function ProveedorEquipo({ children }: PropsWithChildren) {
 
     canal
       .on('presence', { event: 'sync' }, () => setEnLinea(new Set(Object.keys(canal.presenceState()))))
+      // Cambios de rol, nombre o integrantes nuevos se reflejan sin reiniciar la app
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'usuarios' }, () => recargar())
       .subscribe((estado) => {
         suscrito = estado === 'SUBSCRIBED';
         if (suscrito && AppState.currentState === 'active') anunciar();
@@ -82,9 +98,12 @@ export function ProveedorEquipo({ children }: PropsWithChildren) {
       escucha.remove();
       cliente.removeChannel(canal);
     };
-  }, [idUsuario]);
+  }, [idUsuario, recargar]);
 
-  const usuarios = useMemo(() => lista.map((u) => ({ ...u, enVivo: enLinea.has(u.id) })), [lista, enLinea]);
+  const usuarios = useMemo(
+    () => lista.map((u) => ({ ...u, enVivo: DEMO ? u.enVivo : enLinea.has(u.id) })),
+    [lista, enLinea],
+  );
   const actual = usuarios.find((u) => u.id === idUsuario) ?? null;
   const buscarUsuario = useCallback((id: string) => usuarios.find((u) => u.id === id), [usuarios]);
 

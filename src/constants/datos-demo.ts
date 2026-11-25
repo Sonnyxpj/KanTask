@@ -1,6 +1,54 @@
 // Datos de ejemplo para maquetar las pantallas mientras no exista el backend (Supabase).
-// Los usuarios ya vienen de Supabase (ver src/lib/equipo.tsx).
-import type { ChecklistItem, Evidencia, Tarea } from '@/types/modelos';
+// Con Supabase configurado los usuarios vienen de la base de datos (ver src/lib/equipo.tsx).
+import type { Actividad, ChecklistItem, Evidencia, Tarea, Usuario } from '@/types/modelos';
+
+// En modo demo la persona que usa la app es 'u1' y es Editor, para poder probar todas las acciones
+export const USUARIO_DEMO = 'u1';
+export const USUARIOS: Usuario[] = [
+  {
+    id: 'u1',
+    nombre: 'Iván Sánchez',
+    correo: 'ivan@kantask.dev',
+    rol: 'editor',
+    turno: 'Mañana',
+    enVivo: true,
+    cargo: 'Frontend',
+  },
+  {
+    id: 'u2',
+    nombre: 'Benjamín Garrido',
+    correo: 'benjamin@kantask.dev',
+    rol: 'editor',
+    turno: 'Tarde',
+    enVivo: true,
+    cargo: 'Backend',
+  },
+  {
+    id: 'u3',
+    nombre: 'Camila Rojas',
+    correo: 'camila@kantask.dev',
+    rol: 'visualizador',
+    turno: 'Mañana',
+    enVivo: false,
+  },
+  { id: 'u4', nombre: 'Diego Muñoz', correo: 'diego@kantask.dev', rol: 'visualizador', turno: 'Tarde', enVivo: false },
+  {
+    id: 'u5',
+    nombre: 'Valentina Soto',
+    correo: 'valentina@kantask.dev',
+    rol: 'visualizador',
+    turno: 'Mañana',
+    enVivo: true,
+  },
+];
+
+// Fecha ISO relativa a hoy (las fechas límite se guardan como timestamptz)
+function enDias(dias: number, hora: number, minuto: number) {
+  const fecha = new Date();
+  fecha.setDate(fecha.getDate() + dias);
+  fecha.setHours(hora, minuto, 0, 0);
+  return fecha.toISOString();
+}
 
 export const TAREAS: Tarea[] = [
   {
@@ -8,9 +56,10 @@ export const TAREAS: Tarea[] = [
     columnaId: 'c1',
     asignadoA: 'u2',
     titulo: 'Configurar Supabase Auth',
-    descripcion: 'Crear el proyecto en Supabase, habilitar el inicio de sesión con correo y probar el flujo desde la app.',
+    descripcion:
+      'Crear el proyecto en Supabase, habilitar el inicio de sesión con correo y probar el flujo desde la app.',
     prioridad: 'alta',
-    fechaLimite: 'Hoy · 11:30',
+    fechaLimite: enDias(0, 11, 30),
     estado: 'pendiente',
   },
   {
@@ -20,7 +69,7 @@ export const TAREAS: Tarea[] = [
     titulo: 'Diseñar pantalla de perfil',
     descripcion: 'Maquetar la vista de perfil con datos del usuario, ajustes y cierre de sesión.',
     prioridad: 'baja',
-    fechaLimite: 'Hoy · 14:00',
+    fechaLimite: enDias(0, 14, 0),
     estado: 'pendiente',
   },
   {
@@ -30,7 +79,7 @@ export const TAREAS: Tarea[] = [
     titulo: 'Tablero Kanban horizontal',
     descripcion: 'Implementar las columnas con desplazamiento horizontal y tarjetas con prioridad y fecha.',
     prioridad: 'media',
-    fechaLimite: 'Hoy · 12:15',
+    fechaLimite: enDias(0, 12, 15),
     estado: 'en_progreso',
   },
   {
@@ -40,7 +89,7 @@ export const TAREAS: Tarea[] = [
     titulo: 'Corregir error al subir foto',
     descripcion: 'La subida de evidencia falla cuando la imagen supera los 5 MB. Comprimir antes de subir.',
     prioridad: 'alta',
-    fechaLimite: 'Mañana · 10:00',
+    fechaLimite: enDias(1, 10, 0),
     estado: 'en_progreso',
   },
   {
@@ -50,7 +99,7 @@ export const TAREAS: Tarea[] = [
     titulo: 'Modelo de datos en draw.io',
     descripcion: 'Definir entidades Usuario, Tablero, Columna, Tarea, Checklist_Item y Evidencia.',
     prioridad: 'media',
-    fechaLimite: 'Ayer · 18:00',
+    fechaLimite: enDias(-1, 18, 0),
     estado: 'terminado',
   },
 ];
@@ -74,29 +123,57 @@ export const CHECKLIST: ChecklistItem[] = [
 ];
 
 export const EVIDENCIAS: Evidencia[] = [
-  { id: 'e1', tareaId: 't1', urlFoto: 'https://picsum.photos/seed/kantask-1/400/400', fecha: 'Hoy · 09:12' },
-  { id: 'e2', tareaId: 't1', urlFoto: 'https://picsum.photos/seed/kantask-2/400/400', fecha: 'Hoy · 09:40' },
-  { id: 'e3', tareaId: 't5', urlFoto: 'https://picsum.photos/seed/kantask-3/400/400', fecha: 'Ayer · 17:55' },
+  { id: 'e1', tareaId: 't1', urlFoto: 'https://picsum.photos/seed/kantask-1/400/400', fecha: enDias(0, 9, 12) },
+  { id: 'e2', tareaId: 't1', urlFoto: 'https://picsum.photos/seed/kantask-2/400/400', fecha: enDias(0, 9, 40) },
+  { id: 'e3', tareaId: 't5', urlFoto: 'https://picsum.photos/seed/kantask-3/400/400', fecha: enDias(-1, 17, 55) },
 ];
 
-export type TipoActividad = 'asignacion' | 'cambio' | 'evidencia' | 'completada' | 'mencion';
-
-export type Actividad = {
-  id: string;
-  tipo: TipoActividad;
-  texto: string;
-  usuarioId: string;
-  hace: string;
-  accion: string;
-  tareaId?: string;
-};
+// Fecha ISO de hace N minutos
+const haceMinutos = (min: number) => new Date(Date.now() - min * 60_000).toISOString();
 
 export const ACTIVIDAD: Actividad[] = [
-  { id: 'a1', tipo: 'asignacion', texto: "Se te asignó 'Tablero Kanban horizontal'", usuarioId: 'u2', hace: 'Hace 2 min', accion: 'Ver tarea', tareaId: 't3' },
-  { id: 'a2', tipo: 'cambio', texto: "'Corregir error al subir foto' pasó a En progreso", usuarioId: 'u5', hace: 'Hace 18 min', accion: 'Ver tarea', tareaId: 't4' },
-  { id: 'a3', tipo: 'evidencia', texto: 'Nueva evidencia en Configurar Supabase Auth', usuarioId: 'u2', hace: 'Hace 42 min', accion: 'Abrir prueba', tareaId: 't1' },
-  { id: 'a4', tipo: 'completada', texto: 'Modelo de datos en draw.io completada', usuarioId: 'u2', hace: 'Hace 1 hora', accion: 'Ver detalles', tareaId: 't5' },
-  { id: 'a5', tipo: 'mencion', texto: 'Camila te mencionó en Diseñar pantalla de perfil', usuarioId: 'u3', hace: 'Hace 2 horas', accion: 'Responder', tareaId: 't2' },
+  {
+    id: 'a1',
+    tipo: 'asignacion',
+    texto: "Se asignó 'Tablero Kanban horizontal'",
+    usuarioId: 'u2',
+    destinatarioId: 'u1',
+    fecha: haceMinutos(2),
+    tareaId: 't3',
+  },
+  {
+    id: 'a2',
+    tipo: 'cambio',
+    texto: "'Corregir error al subir foto' pasó a En progreso",
+    usuarioId: 'u5',
+    fecha: haceMinutos(18),
+    tareaId: 't4',
+  },
+  {
+    id: 'a3',
+    tipo: 'evidencia',
+    texto: "Nueva evidencia en 'Configurar Supabase Auth'",
+    usuarioId: 'u2',
+    fecha: haceMinutos(42),
+    tareaId: 't1',
+  },
+  {
+    id: 'a4',
+    tipo: 'completada',
+    texto: "'Modelo de datos en draw.io' fue completada",
+    usuarioId: 'u2',
+    fecha: haceMinutos(60),
+    tareaId: 't5',
+  },
+  {
+    id: 'a5',
+    tipo: 'mencion',
+    texto: "Camila te mencionó en 'Diseñar pantalla de perfil'",
+    usuarioId: 'u3',
+    destinatarioId: 'u1',
+    fecha: haceMinutos(120),
+    tareaId: 't2',
+  },
 ];
 
 export function iniciales(nombre: string) {

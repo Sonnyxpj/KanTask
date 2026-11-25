@@ -1,5 +1,4 @@
 // Perfil público del usuario (tabla public.usuarios, creada por el trigger crear_perfil_usuario)
-import { TAREAS } from '@/constants/datos-demo';
 import { supabase } from '@/lib/supabase';
 import type { Rol, Usuario } from '@/types/modelos';
 
@@ -33,21 +32,6 @@ export async function listarUsuarios(): Promise<Usuario[]> {
   const { data, error } = await supabase.from('usuarios').select(COLUMNAS).order('nombre');
   if (error) throw new Error('No se pudo cargar el equipo');
   return (data as FilaUsuario[]).map(aUsuario);
-}
-
-// Cantidad de tareas asignadas a cada integrante, por id de usuario
-export async function contarTareasPorUsuario(): Promise<Record<string, number>> {
-  const contar = (ids: (string | null | undefined)[]) =>
-    ids.reduce<Record<string, number>>((acc, id) => {
-      if (id) acc[id] = (acc[id] ?? 0) + 1;
-      return acc;
-    }, {});
-
-  if (!supabase) return contar(TAREAS.map((t) => t.asignadoA));
-
-  const { data, error } = await supabase.from('tareas').select('asignado_a').not('asignado_a', 'is', null);
-  if (error) throw new Error('No se pudieron cargar las tareas');
-  return contar((data as { asignado_a: string | null }[]).map((t) => t.asignado_a));
 }
 
 export type CambiosPerfil = { nombre: string; telefono?: string };

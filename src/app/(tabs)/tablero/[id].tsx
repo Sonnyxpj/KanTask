@@ -1,88 +1,237 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Checklist } from '@/components/tarea/Checklist';
+import { Comentarios } from '@/components/tarea/Comentarios';
 import { Evidencias } from '@/components/tarea/Evidencias';
 import { Avatar } from '@/components/ui/Avatar';
 import { Boton } from '@/components/ui/Boton';
+import { HojaAcciones, type Accion } from '@/components/ui/HojaAcciones';
 import { Icono } from '@/components/ui/Icono';
-import { Colores, Espacio } from '@/constants/colores';
-import { CHECKLIST, EVIDENCIAS, TAREAS } from '@/constants/datos-demo';
+import { Colores, Espacio, Radio } from '@/constants/colores';
 import { COLUMNAS, PRIORIDADES } from '@/constants/estados';
 import { useEquipo } from '@/lib/equipo';
+import { estaVencida, formatearFecha } from '@/lib/fechas';
+import { motivoNoCierre } from '@/lib/reglas';
+import { useTablero } from '@/lib/tablero';
+import type { Estado } from '@/types/modelos';
 
 // Pantalla 3 · Detalle de tarea
 export default function DetalleTarea() {
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const { buscarUsuario } = useEquipo();
-  const tarea = TAREAS.find((t) => t.id === id) ?? TAREAS[0];
-  const [items, setItems] = useState(() => CHECKLIST.filter((c) => c.tareaId === tarea.id));
-  const fotos = EVIDENCIAS.filter((e) => e.tareaId === tarea.id);
+  const { id, comentar } = useLocalSearchParams<{ id: string; comentar?: string }>();
+  const { buscarUsuario, actual } = useEquipo();
+  const { tareas, checklist, evidencias, cargando, moverTarea, eliminarTarea, alternarItem } = useTablero();
+  const esEditor = actual?.rol === 'editor';
 
+  const [menu, setMenu] = useState<'opciones' | 'eliminar' | null>(null);
+  const [aviso, setAviso] = useState('');
+  const [ocupado, setOcupado] = useState(false);
+
+  const tarea = tareas.find((t) => t.id === id);
+
+  const volver = () => (router.canGoBack() ? router.back() : router.replace('/tablero'));
+
+  if (!tarea) {
+    return (
+      <SafeAreaView edges={['top']} style={styles.pantalla}>
+        <BarraSuperior onVolver={volver} />
+        <View style={styles.centro}>
+          {cargando ? (
+            <ActivityIndicator color={Colores.primario} />
+          ) : (
+            <>
+              <Text style={styles.vacioTitulo}>Tarea no encontrada</Text>
+              <Text style={styles.vacioTexto}>Es posible que otro integrante la haya eliminado.</Text>
+              <Boton titulo="Volver al tablero" variante="secundario" onPress={volver} />
+            </>
+          )}
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const items = checklist.filter((c) => c.tareaId === tarea.id);
+  const fotos = evidencias.filter((e) => e.tareaId === tarea.id);
   const prioridad = PRIORIDADES[tarea.prioridad];
   const responsable = buscarUsuario(tarea.asignadoA);
   const columna = COLUMNAS.find((c) => c.estado === tarea.estado);
   const terminada = tarea.estado === 'terminado';
+  const vencida = !terminada && estaVencida(tarea.fechaLimite);
   // Para cerrar la tarea: checklist completo y al menos una foto de evidencia
-  const puedeCompletar = items.every((i) => i.completado) && fotos.length > 0;
+  const motivo = motivoNoCierre(items, fotos);
+  // El Visualizador solo consulta: no ve ninguna acción de edición
+  const editable = esEditor && !terminada;
 
-  const alternar = (itemId: string) =>
-    setItems((prev) => prev.map((i) => (i.id === itemId ? { ...i, completado: !i.completado } : i)));
+  const ejecutar = async (accion: () => Promise<void>) => {
+    setAviso('');
+    setOcupado(true);
+    try {
+      await accion();
+    } catch (e) {
+      setAviso(e instanceof Error ? e.message : 'No se pudo guardar el cambio');
+    } finally {
+      setOcupado(false);
+    }
+  };
+
+  const mover = (estado: Estado) => ejecutar(() => moverTarea(tarea.id, estado));
+  const alternar = (itemId: string) => ejecutar(() => alternarItem(itemId));
+  const eliminar = () =>
+    ejecutar(async () => {
+      await eliminarTarea(tarea.id);
+      volver();
+    });
+
+  const opciones: Accion[] = [
+    {
+      etiqueta: 'Editar tarea',
+      icono: 'editar',
+      onPress: () => router.push({ pathname: '/tablero/nueva', params: { id: tarea.id } }),
+    },
+    ...COLUMNAS.filter((c) => c.estado !== tarea.estado && c.estado !== 'terminado').map<Accion>((c) => ({
+      etiqueta: terminada ? `Reabrir en ${c.nombre}` : `Mover a ${c.nombre}`,
+      icono: terminada ? 'reabrir' : 'intercambio',
+      onPress: () => mover(c.estado),
+    })),
+    { etiqueta: 'Eliminar tarea', icono: 'basura', peligro: true, onPress: () => setMenu('eliminar') },
+  ];
 
   return (
     <SafeAreaView edges={['top']} style={styles.pantalla}>
-      <View style={styles.barra}>
-        <Pressable onPress={() => router.back()} hitSlop={8}>
-          <Icono nombre="atras" />
-        </Pressable>
-        <Text style={styles.barraTitulo}>Detalle de tarea</Text>
-        <Icono nombre="opciones" color={Colores.textoSecundario} />
-      </View>
+      <BarraSuperior onVolver={volver} onOpciones={esEditor ? () => setMenu('opciones') : undefined} />
 
-      <ScrollView contentContainerStyle={styles.contenido}>
-        <View style={styles.cabecera}>
-          <View style={styles.etiquetas}>
-            <Text style={[styles.prioridad, { color: prioridad.color, backgroundColor: prioridad.fondo }]}>
-              Prioridad {prioridad.etiqueta.toLowerCase()}
-            </Text>
-            {columna && (
-              <View style={styles.estado}>
-                <View style={[styles.punto, { backgroundColor: columna.color }]} />
-                <Text style={styles.estadoTexto}>{columna.nombre}</Text>
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView contentContainerStyle={styles.contenido} keyboardShouldPersistTaps="handled">
+          <View style={styles.cabecera}>
+            <View style={styles.etiquetas}>
+              <Text style={[styles.prioridad, { color: prioridad.color, backgroundColor: prioridad.fondo }]}>
+                Prioridad {prioridad.etiqueta.toLowerCase()}
+              </Text>
+              {columna && (
+                <View style={styles.estado}>
+                  <View style={[styles.punto, { backgroundColor: columna.color }]} />
+                  <Text style={styles.estadoTexto}>{columna.nombre}</Text>
+                </View>
+              )}
+            </View>
+            <Text style={styles.titulo}>{tarea.titulo}</Text>
+            {tarea.descripcion ? <Text style={styles.descripcion}>{tarea.descripcion}</Text> : null}
+          </View>
+
+          <View style={styles.meta}>
+            {responsable && (
+              <View style={styles.metaFila}>
+                <Avatar nombre={responsable.nombre} tamano={24} />
+                <Text style={styles.metaTexto}>Asignado a {responsable.nombre}</Text>
               </View>
             )}
-          </View>
-          <Text style={styles.titulo}>{tarea.titulo}</Text>
-          <Text style={styles.descripcion}>{tarea.descripcion}</Text>
-        </View>
-
-        <View style={styles.meta}>
-          {responsable && (
             <View style={styles.metaFila}>
-              <Avatar nombre={responsable.nombre} tamano={24} />
-              <Text style={styles.metaTexto}>Asignado a {responsable.nombre}</Text>
+              <Icono nombre="reloj" tamano={16} color={vencida ? Colores.peligro : Colores.primario} />
+              <Text style={[styles.metaTexto, { color: vencida ? Colores.peligro : Colores.primario }]}>
+                Fecha límite · {formatearFecha(tarea.fechaLimite)}
+                {vencida ? ' · Vencida' : ''}
+              </Text>
+            </View>
+          </View>
+
+          {!esEditor && (
+            <View style={styles.soloLectura}>
+              <Icono nombre="ojo" tamano={16} color={Colores.primario} />
+              <Text style={styles.soloLecturaTexto}>Modo Visualizador: solo puedes consultar esta tarea.</Text>
             </View>
           )}
-          <View style={styles.metaFila}>
-            <Icono nombre="reloj" tamano={16} color={Colores.primario} />
-            <Text style={[styles.metaTexto, { color: Colores.primario }]}>Fecha límite · {tarea.fechaLimite}</Text>
+
+          <Checklist items={items} onToggle={editable && !ocupado ? alternar : undefined} />
+
+          <Evidencias
+            fotos={fotos}
+            puedeAgregar={editable}
+            onAgregar={() => router.push({ pathname: '/camera', params: { tareaId: tarea.id } })}
+          />
+
+          <Comentarios tareaId={tarea.id} enfocar={comentar === '1'} />
+        </ScrollView>
+
+        {esEditor && (
+          <View style={styles.pie}>
+            {aviso ? <Text style={styles.aviso}>{aviso}</Text> : null}
+            {!terminada && motivo && !aviso ? <Text style={styles.ayuda}>{motivo} para completarla.</Text> : null}
+            <View style={styles.acciones}>
+              {terminada ? (
+                <Boton
+                  titulo="Reabrir tarea"
+                  icono="reabrir"
+                  variante="secundario"
+                  deshabilitado={ocupado}
+                  estilo={styles.flex}
+                  onPress={() => mover('en_progreso')}
+                />
+              ) : (
+                <>
+                  <Boton
+                    titulo={tarea.estado === 'pendiente' ? 'Empezar' : 'A pendiente'}
+                    icono={tarea.estado === 'pendiente' ? 'play' : 'reabrir'}
+                    variante="secundario"
+                    deshabilitado={ocupado}
+                    estilo={styles.flex}
+                    onPress={() => mover(tarea.estado === 'pendiente' ? 'en_progreso' : 'pendiente')}
+                  />
+                  <Boton
+                    titulo="Completar tarea"
+                    deshabilitado={!!motivo || ocupado}
+                    estilo={styles.flex}
+                    onPress={() => mover('terminado')}
+                  />
+                </>
+              )}
+            </View>
           </View>
-        </View>
+        )}
+      </KeyboardAvoidingView>
 
-        <Checklist items={items} onToggle={terminada ? undefined : alternar} />
-
-        <Evidencias fotos={fotos} puedeAgregar={!terminada} onAgregar={() => router.push('/camera')} />
-      </ScrollView>
-
-      {!terminada && (
-        <View style={styles.acciones}>
-          <Boton titulo="Guardar progreso" variante="secundario" estilo={styles.flex} onPress={() => router.back()} />
-          <Boton titulo="Completar tarea" deshabilitado={!puedeCompletar} estilo={styles.flex} onPress={() => router.back()} />
-        </View>
-      )}
+      <HojaAcciones
+        visible={menu === 'opciones'}
+        titulo={tarea.titulo}
+        acciones={opciones}
+        onCerrar={() => setMenu(null)}
+      />
+      <HojaAcciones
+        visible={menu === 'eliminar'}
+        titulo="¿Eliminar esta tarea?"
+        mensaje="Se borrarán también su checklist y sus fotos de evidencia. No se puede deshacer."
+        acciones={[{ etiqueta: 'Sí, eliminar', icono: 'basura', peligro: true, onPress: eliminar }]}
+        onCerrar={() => setMenu(null)}
+      />
     </SafeAreaView>
+  );
+}
+
+function BarraSuperior({ onVolver, onOpciones }: { onVolver: () => void; onOpciones?: () => void }) {
+  return (
+    <View style={styles.barra}>
+      <Pressable onPress={onVolver} hitSlop={8}>
+        <Icono nombre="atras" />
+      </Pressable>
+      <Text style={styles.barraTitulo}>Detalle de tarea</Text>
+      {onOpciones ? (
+        <Pressable onPress={onOpciones} hitSlop={8}>
+          <Icono nombre="opciones" color={Colores.textoSecundario} />
+        </Pressable>
+      ) : (
+        <View style={styles.hueco} />
+      )}
+    </View>
   );
 }
 
@@ -93,6 +242,54 @@ const styles = StyleSheet.create({
   },
   flex: {
     flex: 1,
+  },
+  hueco: {
+    width: 20,
+  },
+  centro: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Espacio.md,
+    padding: Espacio.xl,
+  },
+  vacioTitulo: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colores.texto,
+  },
+  vacioTexto: {
+    fontSize: 14,
+    color: Colores.textoSecundario,
+    textAlign: 'center',
+  },
+  soloLectura: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Espacio.sm,
+    padding: Espacio.md,
+    borderRadius: Radio.md,
+    backgroundColor: Colores.primarioSuave,
+  },
+  soloLecturaTexto: {
+    flex: 1,
+    fontSize: 13,
+    color: Colores.primario,
+  },
+  pie: {
+    gap: Espacio.sm,
+    padding: Espacio.lg,
+    borderTopWidth: 1,
+    borderTopColor: Colores.borde,
+    backgroundColor: Colores.fondo,
+  },
+  aviso: {
+    fontSize: 13,
+    color: Colores.peligro,
+  },
+  ayuda: {
+    fontSize: 12,
+    color: Colores.textoSecundario,
   },
   barra: {
     flexDirection: 'row',
@@ -167,9 +364,5 @@ const styles = StyleSheet.create({
   acciones: {
     flexDirection: 'row',
     gap: Espacio.md,
-    padding: Espacio.lg,
-    borderTopWidth: 1,
-    borderTopColor: Colores.borde,
-    backgroundColor: Colores.fondo,
   },
 });
