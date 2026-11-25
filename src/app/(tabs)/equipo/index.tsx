@@ -1,7 +1,6 @@
-import * as Linking from 'expo-linking';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { MiembroItem } from '@/components/equipo/MiembroItem';
@@ -39,16 +38,6 @@ export default function Equipo() {
     }, [recargar]),
   );
 
-  const invitar = () => {
-    const enlace = Linking.createURL('/registro');
-    Share.share({
-      title: 'Únete a KanTask',
-      message:
-        `${actual?.nombre ?? 'Tu equipo'} te invita al tablero de KanTask. ` +
-        `Crea tu cuenta aquí: ${enlace}\n\nCuando te registres, un editor te asignará tu rol.`,
-    }).catch(() => {});
-  };
-
   const tareasDe = (id: string) => tareasPorUsuario[id] ?? 0;
   const totalTareas = Object.values(tareasPorUsuario).reduce((a, b) => a + b, 0);
   const conectados = usuarios.filter((u) => u.enVivo).length;
@@ -66,15 +55,6 @@ export default function Equipo() {
       <Encabezado
         titulo="Equipo en vivo"
         subtitulo={[actual?.turno, `${usuarios.length} integrantes`].filter(Boolean).join(' · ')}
-        accion={
-          // Agregar integrante: se comparte el enlace de registro; la cuenta nueva entra como
-          // Visualizador y un editor le cambia el rol desde esta misma lista
-          esEditor ? (
-            <Pressable onPress={invitar} hitSlop={8} style={styles.botonInvitar}>
-              <Icono nombre="agregarPersona" tamano={18} />
-            </Pressable>
-          ) : undefined
-        }
       />
 
       <ScrollView contentContainerStyle={styles.contenido} keyboardShouldPersistTaps="handled">
@@ -135,16 +115,6 @@ export default function Equipo() {
 }
 
 const styles = StyleSheet.create({
-  botonInvitar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: Colores.borde,
-    backgroundColor: Colores.superficie,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   pantalla: {
     flex: 1,
     backgroundColor: Colores.fondo,

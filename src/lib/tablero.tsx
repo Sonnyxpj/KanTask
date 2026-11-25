@@ -31,6 +31,7 @@ type ContextoTablero = {
   eliminarTarea: (id: string) => Promise<void>;
   alternarItem: (itemId: string) => Promise<void>;
   agregarEvidencia: (tareaId: string, uri: string, tipo?: string) => Promise<void>;
+  eliminarEvidencia: (id: string) => Promise<void>;
 };
 
 const Contexto = createContext<ContextoTablero | null>(null);
@@ -318,6 +319,14 @@ export function ProveedorTablero({ children }: PropsWithChildren) {
     setEvidencias((p) => (p.some((e) => e.id === nueva.id) ? p : [...p, nueva]));
   };
 
+  const eliminarEvidencia = async (id: string) => {
+    requerirConexion();
+    const foto = evidencias.find((e) => e.id === id);
+    if (!foto) return;
+    if (!DEMO) await servicio.eliminarEvidencia(id, foto.urlFoto);
+    setEvidencias((p) => p.filter((e) => e.id !== id));
+  };
+
   return (
     <Contexto.Provider
       value={{
@@ -337,6 +346,7 @@ export function ProveedorTablero({ children }: PropsWithChildren) {
         eliminarTarea,
         alternarItem,
         agregarEvidencia,
+        eliminarEvidencia,
       }}>
       {children}
     </Contexto.Provider>

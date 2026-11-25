@@ -10,6 +10,7 @@ import { Colores, Espacio, Radio } from '@/constants/colores';
 import { PRIORIDADES } from '@/constants/estados';
 import { useEquipo } from '@/lib/equipo';
 import { aTextoFecha, leerTextoFecha } from '@/lib/fechas';
+import { puedeSerResponsable } from '@/lib/reglas';
 import type { Prioridad, ValoresTarea } from '@/types/modelos';
 
 type Props = {
@@ -30,7 +31,14 @@ export function FormTarea({ inicial, textoBoton = 'Crear tarea', onGuardar }: Pr
   const [titulo, setTitulo] = useState(inicial?.titulo ?? '');
   const [descripcion, setDescripcion] = useState(inicial?.descripcion ?? '');
   const [prioridad, setPrioridad] = useState<Prioridad>(inicial?.prioridad ?? 'media');
-  const [asignadoA, setAsignadoA] = useState(inicial?.asignadoA ?? '');
+  const { usuarios } = useEquipo();
+  // Solo Editores y Programadores pueden ser responsables. Si el actual ya no lo es, hay que elegir otro.
+  const responsables = usuarios.filter(puedeSerResponsable);
+  const [asignadoA, setAsignadoA] = useState(() =>
+    inicial?.asignadoA && (usuarios.length === 0 || responsables.some((u) => u.id === inicial.asignadoA))
+      ? inicial.asignadoA
+      : '',
+  );
   // La fecha se escribe como texto "DD-MM-AAAA HH:MM" y se convierte a ISO al guardar
   const [fechaTexto, setFechaTexto] = useState(inicial ? aTextoFecha(new Date(inicial.fechaLimite)) : '');
   const [items, setItems] = useState<ItemForm[]>(
@@ -40,10 +48,6 @@ export function FormTarea({ inicial, textoBoton = 'Crear tarea', onGuardar }: Pr
   const [errores, setErrores] = useState<Errores>({});
   const [enviando, setEnviando] = useState(false);
   const [calendarioAbierto, setCalendarioAbierto] = useState(false);
-  const { usuarios } = useEquipo();
-
-  // Solo los editores son responsables asignables (se conserva el actual al editar)
-  const responsables = usuarios.filter((u) => u.rol === 'editor' || u.id === inicial?.asignadoA);
 
   // Reemplaza la parte DD-MM-AAAA y conserva la hora si ya se escribió
   const elegirFecha = (fecha: Date) => {
@@ -79,6 +83,8 @@ export function FormTarea({ inicial, textoBoton = 'Crear tarea', onGuardar }: Pr
       nuevos.fechaLimite = 'La fecha límite no puede estar en el pasado';
 
     if (!asignadoA) nuevos.asignadoA = 'Selecciona un responsable';
+    else if (!responsables.some((u) => u.id === asignadoA))
+      nuevos.asignadoA = 'Solo se pueden asignar tareas a editores o programadores';
     if (items.some((i) => i.descripcion.trim().length > 200))
       nuevos.general = 'Cada ítem del checklist admite hasta 200 caracteres';
 
@@ -169,7 +175,7 @@ export function FormTarea({ inicial, textoBoton = 'Crear tarea', onGuardar }: Pr
               </Pressable>
             );
           })}
-          {responsables.length === 0 && <Text style={styles.ayuda}>No hay editores en el equipo</Text>}
+          {responsables.length === 0 && <Text style={styles.ayuda}>No hay editores ni programadores en el equipo</Text>}
         </View>
         {errores.asignadoA && <Text style={styles.error}>{errores.asignadoA}</Text>}
       </View>

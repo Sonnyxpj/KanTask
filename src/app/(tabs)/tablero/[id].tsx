@@ -23,7 +23,7 @@ import { Colores, Espacio, Radio } from '@/constants/colores';
 import { COLUMNAS, PRIORIDADES } from '@/constants/estados';
 import { useEquipo } from '@/lib/equipo';
 import { estaVencida, formatearFecha } from '@/lib/fechas';
-import { motivoNoCierre } from '@/lib/reglas';
+import { motivoNoCierre, puedeTrabajarTarea } from '@/lib/reglas';
 import { useTablero } from '@/lib/tablero';
 import type { Estado } from '@/types/modelos';
 
@@ -31,7 +31,8 @@ import type { Estado } from '@/types/modelos';
 export default function DetalleTarea() {
   const { id, comentar } = useLocalSearchParams<{ id: string; comentar?: string }>();
   const { buscarUsuario, actual } = useEquipo();
-  const { tareas, checklist, evidencias, cargando, moverTarea, eliminarTarea, alternarItem } = useTablero();
+  const { tareas, checklist, evidencias, cargando, moverTarea, eliminarTarea, alternarItem, eliminarEvidencia } =
+    useTablero();
   const esEditor = actual?.rol === 'editor';
 
   const [menu, setMenu] = useState<'opciones' | 'eliminar' | null>(null);
@@ -70,8 +71,9 @@ export default function DetalleTarea() {
   const vencida = !terminada && estaVencida(tarea.fechaLimite);
   // Para cerrar la tarea: checklist completo y al menos una foto de evidencia
   const motivo = motivoNoCierre(items, fotos);
-  // El Visualizador solo consulta: no ve ninguna acción de edición
-  const editable = esEditor && !terminada;
+  // Editor: todo. Programador: avanza y completa solo sus tareas. El resto solo consulta.
+  const puedeTrabajar = puedeTrabajarTarea(actual, tarea);
+  const editable = puedeTrabajar && !terminada;
 
   const ejecutar = async (accion: () => Promise<void>) => {
     setAviso('');
@@ -145,10 +147,14 @@ export default function DetalleTarea() {
             </View>
           </View>
 
-          {!esEditor && (
+          {!puedeTrabajar && (
             <View style={styles.soloLectura}>
               <Icono nombre="ojo" tamano={16} color={Colores.primario} />
-              <Text style={styles.soloLecturaTexto}>Modo Visualizador: solo puedes consultar esta tarea.</Text>
+              <Text style={styles.soloLecturaTexto}>
+                {actual?.rol === 'programador'
+                  ? 'Esta tarea está asignada a otra persona: solo puedes consultarla.'
+                  : 'Modo Visualizador: solo puedes consultar esta tarea.'}
+              </Text>
             </View>
           )}
 
@@ -157,13 +163,14 @@ export default function DetalleTarea() {
           <Evidencias
             fotos={fotos}
             puedeAgregar={editable}
+            onEliminar={editable && !ocupado ? (fotoId) => ejecutar(() => eliminarEvidencia(fotoId)) : undefined}
             onAgregar={() => router.push({ pathname: '/camera', params: { tareaId: tarea.id } })}
           />
 
           <Comentarios tareaId={tarea.id} enfocar={comentar === '1'} />
         </ScrollView>
 
-        {esEditor && (
+        {puedeTrabajar && (
           <View style={styles.pie}>
             {aviso ? <Text style={styles.aviso}>{aviso}</Text> : null}
             {!terminada && motivo && !aviso ? <Text style={styles.ayuda}>{motivo} para completarla.</Text> : null}

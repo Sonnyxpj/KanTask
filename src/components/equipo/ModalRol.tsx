@@ -17,6 +17,7 @@ type Props = {
 
 const DESCRIPCION: Record<Rol, string> = {
   editor: 'Puede crear, editar y mover tareas, y cambiar roles.',
+  programador: 'Recibe tareas y puede avanzarlas y completarlas (checklist, fotos y estado).',
   visualizador: 'Solo puede ver el tablero, sin modificarlo.',
 };
 

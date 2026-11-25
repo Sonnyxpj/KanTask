@@ -31,6 +31,7 @@ export function useActividad() {
 }
 
 const TITULOS: Record<Actividad['tipo'], string> = {
+  creada: 'Nueva tarea',
   asignacion: 'Nueva tarea asignada',
   cambio: 'Cambio de estado',
   evidencia: 'Nueva evidencia',
@@ -42,7 +43,7 @@ const DEMO = !supabase;
 
 export function ProveedorActividad({ children }: PropsWithChildren) {
   const { sesion } = useSesion();
-  const { buscarUsuario } = useEquipo();
+  const { buscarUsuario, actual } = useEquipo();
   const idUsuario = sesion?.user.id;
 
   const [lista, setLista] = useState<Actividad[]>(DEMO ? ACTIVIDAD : []);
@@ -65,9 +66,11 @@ export function ProveedorActividad({ children }: PropsWithChildren) {
 
   // buscarUsuario cambia con cada carga del equipo; el canal Realtime usa siempre el último
   const buscarRef = useRef(buscarUsuario);
+  const rolRef = useRef(actual?.rol);
   useEffect(() => {
     buscarRef.current = buscarUsuario;
-  }, [buscarUsuario]);
+    rolRef.current = actual?.rol;
+  }, [buscarUsuario, actual?.rol]);
 
   const recargar = useCallback(async () => {
     if (DEMO || !idUsuario) return;
@@ -106,8 +109,12 @@ export function ProveedorActividad({ children }: PropsWithChildren) {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'actividad' }, (cambio) => {
         const nueva = aActividad(cambio.new as Parameters<typeof aActividad>[0]);
         setLista((p) => (p.some((a) => a.id === nueva.id) ? p : [nueva, ...p]));
-        // Aviso local solo si me afecta y no lo hice yo
-        if (nueva.destinatarioId === idUsuario && nueva.usuarioId !== idUsuario) {
+        // Aviso local si me afecta, o si soy Visualizador y se creó o completó una tarea
+        // (los Visualizadores no tienen tareas asignadas: así siguen el avance del equipo)
+        const paraMi = nueva.destinatarioId === idUsuario;
+        const avisoEquipo =
+          rolRef.current === 'visualizador' && (nueva.tipo === 'creada' || nueva.tipo === 'completada');
+        if ((paraMi || avisoEquipo) && nueva.usuarioId !== idUsuario) {
           avisar(TITULOS[nueva.tipo], textoActividad(nueva, idUsuario, buscarRef.current), nueva.tareaId).catch(
             () => {},
           );

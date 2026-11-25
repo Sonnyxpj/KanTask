@@ -15,5 +15,6 @@ export const PRIORIDADES: Record<Prioridad, { etiqueta: string; color: string; f
 
 export const ROLES: Record<Rol, { etiqueta: string; color: string; fondo: string }> = {
   editor: { etiqueta: 'Editor', color: Colores.morado, fondo: Colores.moradoSuave },
+  programador: { etiqueta: 'Programador', color: Colores.exito, fondo: Colores.exitoSuave },
   visualizador: { etiqueta: 'Visualizador', color: Colores.primario, fondo: Colores.primarioSuave },
 };

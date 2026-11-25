@@ -2,6 +2,7 @@
 // Las reglas de permisos (RLS por rol) y la regla de cierre (trigger validar_cierre_tarea)
 // viven en supabase/schema.sql; aquí solo se traducen los errores para la interfaz.
 import type { PostgrestError, SupabaseClient } from '@supabase/supabase-js';
+import { File } from 'expo-file-system';
 
 import { supabase } from '@/lib/supabase';
 import type { ChecklistItem, Estado, Evidencia, Prioridad, Tablero, Tarea, ValoresTarea } from '@/types/modelos';
@@ -69,9 +70,15 @@ function cliente(): SupabaseClient {
 function traducir(error: PostgrestError | { message: string }, porDefecto: string): Error {
   const mensaje = error.message;
   // Los triggers ya lanzan el mensaje en español (validar_cierre_tarea)
-  if (mensaje.includes('checklist sin completar') || mensaje.includes('foto de evidencia')) return new Error(mensaje);
+  if (
+    mensaje.includes('checklist sin completar') ||
+    mensaje.includes('foto de evidencia') ||
+    mensaje.includes('asignar tareas a editores') ||
+    mensaje.includes('Solo los editores pueden editar')
+  )
+    return new Error(mensaje);
   if (mensaje.includes('row-level security') || ('code' in error && error.code === '42501'))
-    return new Error('No tienes permiso para hacer esto (solo editores)');
+    return new Error('No tienes permiso para hacer esto');
   if (mensaje.toLowerCase().includes('maximum allowed size') || mensaje.toLowerCase().includes('too large'))
     return new Error('La foto supera el máximo de 5 MB');
   if (mensaje.toLowerCase().includes('network') || mensaje.toLowerCase().includes('fetch'))
@@ -220,8 +227,10 @@ export async function editarTarea(id: string, valores: ValoresTarea, checklistAc
 
 // Mover de columna. Al pasar a "terminado" el trigger exige checklist completo + 1 foto.
 export async function moverTarea(id: string, estado: Estado, columnaId: string): Promise<void> {
-  const res = await cliente().from('tareas').update({ estado, columna_id: columnaId }).eq('id', id);
+  const res = await cliente().from('tareas').update({ estado, columna_id: columnaId }).eq('id', id).select('id');
   if (res.error) throw traducir(res.error, 'No se pudo mover la tarea');
+  // Con RLS, un UPDATE sin permiso no da error: simplemente no cambia filas
+  if (res.data?.length === 0) throw new Error('No tienes permiso para mover esta tarea');
 }
 
 export async function eliminarTarea(id: string, rutasEvidencia: string[]): Promise<void> {
@@ -234,8 +243,9 @@ export async function eliminarTarea(id: string, rutasEvidencia: string[]): Promi
 }
 
 export async function marcarItem(id: string, completado: boolean): Promise<void> {
-  const res = await cliente().from('checklist_items').update({ completado }).eq('id', id);
+  const res = await cliente().from('checklist_items').update({ completado }).eq('id', id).select('id');
   if (res.error) throw traducir(res.error, 'No se pudo actualizar el checklist');
+  if (res.data?.length === 0) throw new Error('No tienes permiso para modificar este checklist');
 }
 
 // ---------------------------------------------------------------------------
@@ -250,12 +260,15 @@ export async function subirEvidencia(tareaId: string, uri: string, tipo = 'image
   const contentType = EXTENSIONES[tipo] ? tipo : 'image/jpeg';
   const ruta = `${tareaId}/${Date.now()}.${EXTENSIONES[contentType]}`;
 
+  // Se lee el archivo local con expo-file-system: fetch(file://...) en React Native puede
+  // devolver un cuerpo vacío y la foto queda subida con 0 bytes (se registra pero no se ve)
   let cuerpo: ArrayBuffer;
   try {
-    cuerpo = await (await fetch(uri)).arrayBuffer();
+    cuerpo = await new File(uri).arrayBuffer();
   } catch {
     throw new Error('No se pudo leer la foto');
   }
+  if (cuerpo.byteLength === 0) throw new Error('La foto quedó vacía, intenta tomarla de nuevo');
 
   const subida = await sb.storage.from(BUCKET).upload(ruta, cuerpo, { contentType, upsert: false });
   if (subida.error) throw traducir(subida.error, 'No se pudo subir la foto');
@@ -270,6 +283,17 @@ export async function subirEvidencia(tareaId: string, uri: string, tipo = 'image
     throw traducir(fila.error, 'No se pudo guardar la evidencia');
   }
   return aEvidencia(fila.data as FilaEvidencia);
+}
+
+export async function eliminarEvidencia(id: string, ruta: string): Promise<void> {
+  const sb = cliente();
+  const res = await sb.from('evidencias').delete().eq('id', id).select('id');
+  if (res.error) throw traducir(res.error, 'No se pudo eliminar la foto');
+  // Con RLS un borrado sin permiso no da error: simplemente no borra filas
+  if (res.data.length === 0) throw new Error('No tienes permiso para hacer esto');
+  // El archivo se borra después de la fila; si falla solo queda un archivo huérfano en el bucket
+  if (!esUrlDirecta(ruta)) await sb.storage.from(BUCKET).remove([ruta]);
+  cache.delete(ruta);
 }
 
 // URLs firmadas (el bucket es privado). Se guardan en memoria hasta poco antes de vencer.
@@ -295,6 +319,12 @@ export async function firmarEvidencias(rutas: string[]): Promise<Record<string, 
   if (pendientes.length > 0 && supabase) {
     const { data, error } = await supabase.storage.from(BUCKET).createSignedUrls(pendientes, DURACION);
     if (error) throw traducir(error, 'No se pudieron cargar las fotos');
+    const fallidas = data.filter((f) => !f.signedUrl || !f.path);
+    if (fallidas.length > 0)
+      console.warn(
+        'Fotos sin URL firmada:',
+        fallidas.map((f) => `${f.path}: ${f.error}`),
+      );
     for (const f of data) {
       if (!f.signedUrl || !f.path) continue;
       resultado[f.path] = f.signedUrl;

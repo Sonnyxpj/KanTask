@@ -1,5 +1,19 @@
 // Reglas de negocio puras (sin React ni Supabase), cubiertas por pruebas en __tests__/
-import type { Actividad, ChecklistItem, Evidencia, Usuario } from '@/types/modelos';
+import type { Actividad, ChecklistItem, Evidencia, Tarea, Usuario } from '@/types/modelos';
+
+// Quién puede ser responsable de una tarea (lo valida también el trigger validar_responsable_tarea)
+export const puedeSerResponsable = (u: Pick<Usuario, 'rol'>) => u.rol === 'editor' || u.rol === 'programador';
+
+// Quién puede avanzar una tarea (checklist, fotos, moverla y completarla): los Editores
+// cualquiera; los Programadores solo las que tienen asignadas. Igual que las políticas RLS.
+export function puedeTrabajarTarea(
+  usuario: Pick<Usuario, 'id' | 'rol'> | null | undefined,
+  tarea: Pick<Tarea, 'asignadoA'>,
+) {
+  if (!usuario) return false;
+  if (usuario.rol === 'editor') return true;
+  return usuario.rol === 'programador' && tarea.asignadoA === usuario.id;
+}
 
 // Regla de cierre (la misma que aplica el trigger validar_cierre_tarea en la BD):
 // checklist completo y al menos una foto de evidencia

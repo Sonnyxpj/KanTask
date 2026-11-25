@@ -4,14 +4,17 @@
 -- Basado en el "Modelo de Datos" del informe:
 --   Usuario, Tablero, Columna, Tarea, Checklist_Item, Evidencia
 -- Además incluye:
---   · Roles Editor / Visualizador con Row Level Security (RLS)
+--   · Roles con Row Level Security (RLS):
+--       Editor        crea, edita, asigna, mueve y borra tareas; cambia roles
+--       Programador   puede ser responsable; avanza y completa solo sus tareas
+--       Visualizador  solo lectura (recibe avisos de tareas creadas y completadas)
 --   · Cuentas nuevas como Visualizador; un editor cambia roles con cambiar_rol()
 --   · Correo del perfil sincronizado con Supabase Auth al confirmar un cambio
 --   · Validación de cierre: checklist completo + al menos una foto de evidencia
 --   · Bucket de Storage "evidencias" para las fotos
 --   · Tabla "actividad" para la Pantalla 4 (se llena sola con triggers)
 --   · Publicación Realtime para sincronizar entre dispositivos
---   · Comentarios con menciones @ (sección 7, también en migraciones/001)
+--   · Comentarios con menciones @
 --
 -- Uso: Supabase Dashboard → SQL Editor → pegar este archivo → Run.
 -- =============================================================================
@@ -20,10 +23,10 @@
 -- 1. TIPOS
 -- =============================================================================
 
-create type public.rol_usuario as enum ('editor', 'visualizador');
+create type public.rol_usuario as enum ('editor', 'programador', 'visualizador');
 create type public.prioridad_tarea as enum ('alta', 'media', 'baja');
 create type public.estado_tarea as enum ('pendiente', 'en_progreso', 'terminado');
-create type public.tipo_actividad as enum ('asignacion', 'cambio', 'evidencia', 'completada', 'mencion');
+create type public.tipo_actividad as enum ('asignacion', 'cambio', 'evidencia', 'completada', 'mencion', 'creada');
 
 
 -- =============================================================================
@@ -133,6 +136,35 @@ as $$
   select exists (
     select 1 from public.usuarios
     where id = auth.uid() and rol = 'editor'
+  );
+$$;
+
+-- ¿El usuario actual tiene rol programador?
+create or replace function public.es_programador()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.usuarios
+    where id = auth.uid() and rol = 'programador'
+  );
+$$;
+
+-- ¿El usuario actual es Programador y responsable de esa tarea? Recibe el id como texto
+-- para usarlo también con la carpeta de la foto en Storage (<tarea_id>/<archivo>).
+create or replace function public.es_responsable(p_tarea text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select public.es_programador() and exists (
+    select 1 from public.tareas
+    where id::text = p_tarea and asignado_a = auth.uid()
   );
 $$;
 
@@ -316,7 +348,81 @@ create trigger tareas_validar_cierre
   before insert or update of estado on public.tareas
   for each row execute function public.validar_cierre_tarea();
 
--- Registrar actividad de tareas: asignaciones, cambios de estado y cierres
+-- Responsable: solo Editores y Programadores. El trigger corre al crear la tarea y
+-- cuando el UPDATE incluye asignado_a (al editarla); al moverla de columna no, así que
+-- una tarea de alguien que después pasó a Visualizador se puede seguir moviendo.
+create or replace function public.validar_responsable_tarea()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if new.asignado_a is not null
+    and not exists (
+      select 1 from public.usuarios
+      where id = new.asignado_a and rol in ('editor', 'programador')
+    ) then
+    raise exception 'Solo se pueden asignar tareas a editores o programadores';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger tareas_validar_responsable
+  before insert or update of asignado_a on public.tareas
+  for each row execute function public.validar_responsable_tarea();
+
+-- Quien no es Editor (el Programador en sus tareas) solo puede avanzar la tarea:
+-- cambiar estado/columna y marcar ítems. RLS no restringe columnas, lo validan estos triggers.
+create or replace function public.proteger_datos_tarea()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if auth.uid() is not null and not public.es_editor() and (
+    new.titulo is distinct from old.titulo
+    or new.descripcion is distinct from old.descripcion
+    or new.prioridad is distinct from old.prioridad
+    or new.fecha_limite is distinct from old.fecha_limite
+    or new.asignado_a is distinct from old.asignado_a
+    or new.posicion is distinct from old.posicion
+    or new.creado_por is distinct from old.creado_por
+  ) then
+    raise exception 'Solo los editores pueden editar los datos de la tarea';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger tareas_proteger_datos
+  before update on public.tareas
+  for each row execute function public.proteger_datos_tarea();
+
+create or replace function public.proteger_datos_checklist()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if auth.uid() is not null and not public.es_editor() and (
+    new.descripcion is distinct from old.descripcion
+    or new.orden is distinct from old.orden
+    or new.tarea_id is distinct from old.tarea_id
+  ) then
+    raise exception 'Solo los editores pueden editar los datos de la tarea';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger checklist_proteger_datos
+  before update on public.checklist_items
+  for each row execute function public.proteger_datos_checklist();
+
+-- Registrar actividad de tareas: creación (para todo el equipo), asignaciones,
+-- cambios de estado y cierres
 create or replace function public.registrar_actividad_tarea()
 returns trigger
 language plpgsql
@@ -324,6 +430,11 @@ security definer
 set search_path = ''
 as $$
 begin
+  if tg_op = 'INSERT' then
+    insert into public.actividad (tipo, texto, tarea_id, usuario_id, destinatario_id)
+    values ('creada', format('Nueva tarea: ''%s''', new.titulo), new.id, auth.uid(), null);
+  end if;
+
   if new.asignado_a is not null
     and (tg_op = 'INSERT' or new.asignado_a is distinct from old.asignado_a) then
     insert into public.actividad (tipo, texto, tarea_id, usuario_id, destinatario_id)
@@ -379,6 +490,8 @@ create trigger evidencias_registrar_actividad
 -- 4. ROW LEVEL SECURITY
 -- -----------------------------------------------------------------------------
 -- Visualizador: solo lectura.  Editor: crea, edita, mueve y borra.
+-- Programador: en las tareas asignadas a él marca el checklist, sube/borra fotos
+-- y las mueve de columna (incluido completarlas).
 -- =============================================================================
 
 alter table public.usuarios        enable row level security;
@@ -407,7 +520,8 @@ create policy "tableros: editar (editor)" on public.tableros
 create policy "tableros: borrar (dueño)" on public.tableros
   for delete to authenticated using (usuario_id = (select auth.uid()));
 
--- columnas, tareas, checklist_items, evidencias: misma regla
+-- columnas, tareas, checklist_items, evidencias: el Editor escribe todo;
+-- el Programador solo avanza sus tareas
 create policy "columnas: leer" on public.columnas
   for select to authenticated using (true);
 create policy "columnas: escribir (editor)" on public.columnas
@@ -417,16 +531,28 @@ create policy "tareas: leer" on public.tareas
   for select to authenticated using (true);
 create policy "tareas: escribir (editor)" on public.tareas
   for all to authenticated using ((select public.es_editor())) with check ((select public.es_editor()));
+create policy "tareas: avanzar las propias (programador)" on public.tareas
+  for update to authenticated
+  using (asignado_a = (select auth.uid()) and (select public.es_programador()))
+  with check (asignado_a = (select auth.uid()) and (select public.es_programador()));
 
 create policy "checklist: leer" on public.checklist_items
   for select to authenticated using (true);
 create policy "checklist: escribir (editor)" on public.checklist_items
   for all to authenticated using ((select public.es_editor())) with check ((select public.es_editor()));
+create policy "checklist: marcar las propias (programador)" on public.checklist_items
+  for update to authenticated
+  using (public.es_responsable(tarea_id::text))
+  with check (public.es_responsable(tarea_id::text));
 
 create policy "evidencias: leer" on public.evidencias
   for select to authenticated using (true);
 create policy "evidencias: escribir (editor)" on public.evidencias
   for all to authenticated using ((select public.es_editor())) with check ((select public.es_editor()));
+create policy "evidencias: subir en las propias (programador)" on public.evidencias
+  for insert to authenticated with check (public.es_responsable(tarea_id::text));
+create policy "evidencias: borrar en las propias (programador)" on public.evidencias
+  for delete to authenticated using (public.es_responsable(tarea_id::text));
 
 -- actividad: solo lectura (la escriben los triggers)
 create policy "actividad: leer" on public.actividad
@@ -450,6 +576,13 @@ create policy "evidencias storage: subir (editor)" on storage.objects
   for insert to authenticated with check (bucket_id = 'evidencias' and (select public.es_editor()));
 create policy "evidencias storage: borrar (editor)" on storage.objects
   for delete to authenticated using (bucket_id = 'evidencias' and (select public.es_editor()));
+-- El Programador sube y borra fotos solo en la carpeta de sus tareas (<tarea_id>/...)
+create policy "evidencias storage: subir (programador)" on storage.objects
+  for insert to authenticated
+  with check (bucket_id = 'evidencias' and public.es_responsable((storage.foldername(name))[1]));
+create policy "evidencias storage: borrar (programador)" on storage.objects
+  for delete to authenticated
+  using (bucket_id = 'evidencias' and public.es_responsable((storage.foldername(name))[1]));
 
 
 -- =============================================================================
@@ -470,7 +603,7 @@ alter publication supabase_realtime add table
 
 
 -- =============================================================================
--- 7. COMENTARIOS Y MENCIONES (migraciones/001_comentarios_menciones.sql)
+-- 7. COMENTARIOS Y MENCIONES
 -- =============================================================================
 
 -- Comentario en una tarea. "menciones" guarda los ids de los usuarios mencionados con @

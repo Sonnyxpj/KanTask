@@ -6,7 +6,7 @@ Rúbrica: Parte 1 (contexto, **≤ 5 min**) + Parte 2 (app funcionando, **≤ 10
 
 ## Preparación (antes de grabar)
 
-- [ ] Aplicar `supabase/schema.sql` (o las migraciones pendientes de `supabase/migraciones/`).
+- [ ] Aplicar `supabase/schema.sql`.
 - [ ] Dos cuentas: **Editor** (teléfono A) y **Visualizador** (teléfono B o emulador). Para el editor:
       `update public.usuarios set rol = 'editor' where correo = '...';`
 - [ ] App corriendo en el teléfono con un development build (`npx expo run:android`). No hace falta APK; la cámara y las notificaciones no funcionan en la web.

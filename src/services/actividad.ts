@@ -61,9 +61,9 @@ export async function listarComentarios(tareaId: string): Promise<Comentario[]> 
     .eq('tarea_id', tareaId)
     .order('created_at');
   if (error) {
-    // La tabla se agrega con supabase/migraciones/001_comentarios_menciones.sql
+    // La tabla se crea en la sección 7 de supabase/schema.sql
     if (error.code === '42P01' || error.message.includes('comentarios'))
-      throw new Error('Falta aplicar la migración de comentarios en Supabase');
+      throw new Error('Falta crear la tabla de comentarios en Supabase');
     throw new Error('No se pudieron cargar los comentarios');
   }
   return (data as FilaComentario[]).map(aComentario);

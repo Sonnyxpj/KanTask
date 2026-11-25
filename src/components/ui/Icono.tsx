@@ -32,7 +32,6 @@ const ICONOS = {
   flash: { ios: 'bolt', android: 'flash_on', web: 'flash_on' },
   cerrar: { ios: 'xmark', android: 'close', web: 'close' },
   buscar: { ios: 'magnifyingglass', android: 'search', web: 'search' },
-  agregarPersona: { ios: 'person.badge.plus', android: 'person_add', web: 'person_add' },
   filtros: { ios: 'slider.horizontal.3', android: 'tune', web: 'tune' },
   editar: { ios: 'pencil', android: 'edit', web: 'edit' },
   telefono: { ios: 'phone', android: 'call', web: 'call' },

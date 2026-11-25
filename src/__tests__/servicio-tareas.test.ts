@@ -37,6 +37,12 @@ const mockStorage = {
   remove: jest.fn(() => Promise.resolve({ error: null })),
 };
 
+// Lectura de la foto local (expo-file-system)
+let mockBytes = 8;
+jest.mock('expo-file-system', () => ({
+  File: jest.fn().mockImplementation(() => ({ arrayBuffer: () => Promise.resolve(new ArrayBuffer(mockBytes)) })),
+}));
+
 jest.mock('@/lib/supabase', () => ({
   supabase: { from: (t: string) => mockConsulta(t), storage: { from: () => mockStorage } },
 }));
@@ -84,7 +90,7 @@ describe('crearTarea', () => {
 
   it('un Visualizador recibe un mensaje de permisos (RLS)', async () => {
     respuestas = [{ error: { message: 'new row violates row-level security policy', code: '42501' } }];
-    await expect(crearTarea('col', valores)).rejects.toThrow('No tienes permiso para hacer esto (solo editores)');
+    await expect(crearTarea('col', valores)).rejects.toThrow('No tienes permiso para hacer esto');
   });
 });
 
@@ -109,7 +115,14 @@ describe('moverTarea', () => {
 
 describe('subirEvidencia', () => {
   beforeEach(() => {
-    globalThis.fetch = jest.fn(() => Promise.resolve({ arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) })) as never;
+    mockBytes = 8;
+  });
+
+  it('rechaza una foto vacía sin subirla', async () => {
+    mockBytes = 0;
+    mockStorage.upload.mockClear();
+    await expect(subirEvidencia('t1', 'file:///foto.jpg')).rejects.toThrow('vacía');
+    expect(mockStorage.upload).not.toHaveBeenCalled();
   });
 
   it('sube la foto al bucket y registra la evidencia', async () => {

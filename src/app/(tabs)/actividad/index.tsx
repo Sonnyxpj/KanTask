@@ -23,6 +23,13 @@ const TIPOS: Record<
   TipoActividad,
   { icono: NombreIcono; color: string; fondo: string; filtro: Filtro; accion: string }
 > = {
+  creada: {
+    icono: 'mas',
+    color: Colores.primario,
+    fondo: Colores.primarioSuave,
+    filtro: 'Tareas',
+    accion: 'Ver tarea',
+  },
   asignacion: {
     icono: 'documento',
     color: Colores.primario,

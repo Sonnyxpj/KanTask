@@ -48,8 +48,7 @@ src/
 └── constants/                        # colores.ts, estados.ts, datos-demo.ts
 
 supabase/
-├── schema.sql                        # Esquema completo (instalación nueva)
-└── migraciones/                      # Cambios para bases ya creadas
+└── schema.sql                        # Esquema completo: tablas, roles, RLS, triggers, Storage y Realtime
 ```
 
 ## Modelo de datos

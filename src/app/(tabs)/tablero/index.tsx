@@ -23,6 +23,7 @@ import { Colores, Espacio, Radio } from '@/constants/colores';
 import { COLUMNAS } from '@/constants/estados';
 import { useEquipo } from '@/lib/equipo';
 import { formatearHace } from '@/lib/fechas';
+import { puedeTrabajarTarea } from '@/lib/reglas';
 import { useTablero } from '@/lib/tablero';
 import type { Tarea } from '@/types/modelos';
 
@@ -34,6 +35,7 @@ export default function Tablero() {
   const { tablero, tareas, checklist, cargando, error, sinConexion, actualizado, sinTablero, recargar, moverTarea } =
     useTablero();
   const esEditor = actual?.rol === 'editor';
+  const esProgramador = actual?.rol === 'programador';
 
   const [moviendo, setMoviendo] = useState<Tarea | null>(null);
   const [aviso, setAviso] = useState('');
@@ -106,7 +108,11 @@ export default function Tablero() {
           <View style={styles.resumen}>
             <Text style={styles.resumenTitulo}>Tareas · {tareas.length}</Text>
             <Text style={styles.resumenAyuda}>
-              {esEditor ? 'Mantén presionada una tarea para moverla' : 'Deslizar columnas →'}
+              {esEditor
+                ? 'Mantén presionada una tarea para moverla'
+                : esProgramador
+                  ? 'Mantén presionada una de tus tareas para moverla'
+                  : 'Deslizar columnas →'}
             </Text>
           </View>
 
@@ -134,7 +140,7 @@ export default function Tablero() {
                         completadas={items.filter((c) => c.completado).length}
                         total={items.length}
                         onPress={() => router.push({ pathname: '/tablero/[id]', params: { id: tarea.id } })}
-                        onLongPress={esEditor ? () => setMoviendo(tarea) : undefined}
+                        onLongPress={puedeTrabajarTarea(actual, tarea) ? () => setMoviendo(tarea) : undefined}
                       />
                     );
                   })}

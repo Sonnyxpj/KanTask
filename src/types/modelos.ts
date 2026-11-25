@@ -1,6 +1,6 @@
 // Tipos del modelo de datos (ver "Modelo de Datos" en el informe)
 
-export type Rol = 'editor' | 'visualizador';
+export type Rol = 'editor' | 'programador' | 'visualizador';
 export type Prioridad = 'alta' | 'media' | 'baja';
 export type Estado = 'pendiente' | 'en_progreso' | 'terminado';
 
@@ -65,7 +65,7 @@ export type Evidencia = {
   fecha: string;
 };
 
-export type TipoActividad = 'asignacion' | 'cambio' | 'evidencia' | 'completada' | 'mencion';
+export type TipoActividad = 'creada' | 'asignacion' | 'cambio' | 'evidencia' | 'completada' | 'mencion';
 
 // Historial del equipo (Pantalla 4), lo escriben los triggers de la BD
 export type Actividad = {

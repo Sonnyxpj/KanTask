@@ -130,7 +130,7 @@ async function main() {
         descripcion: 'Creada por scripts/probar-supabase.mjs',
         prioridad: 'media',
         fecha_limite: new Date(Date.now() + 86_400_000).toISOString(),
-        asignado_a: V.id,
+        asignado_a: E.id,
         columna_id: colPend,
         estado: 'pendiente',
       })
@@ -165,6 +165,12 @@ async function main() {
     await V.sb.from('tareas').update({ titulo: 'hackeado' }).eq('id', tareaId);
     const intacta = await E.sb.from('tareas').select('titulo').eq('id', tareaId).single();
     revisar(intacta.data.titulo === nueva.data.titulo, 'no puede editar la tarea');
+    const aVisor = await E.sb.from('tareas').update({ asignado_a: V.id }).eq('id', tareaId);
+    revisar(
+      !!aVisor.error && aVisor.error.message.includes('editores'),
+      'no se puede asignar una tarea a un Visualizador',
+      aVisor.error?.message ?? 'la BD aceptó la asignación (¿supabase/schema.sql está actualizado?)',
+    );
     const insV = await V.sb.from('checklist_items').insert({ tarea_id: tareaId, descripcion: 'x', orden: 9 });
     revisar(!!insV.error, 'no puede agregar ítems al checklist');
     const subV = await V.sb.storage
@@ -234,15 +240,15 @@ async function main() {
 
     const act = await V.sb.from('actividad').select('tipo, destinatario_id').eq('tarea_id', tareaId);
     const tipos = new Set(act.data?.map((a) => a.tipo));
-    for (const t of ['asignacion', 'evidencia', 'completada'])
+    for (const t of ['creada', 'asignacion', 'evidencia', 'completada'])
       revisar(
         tipos.has(t),
         `actividad registra "${t}" (trigger)`,
         `tipos encontrados: ${[...tipos].join(', ') || 'ninguno'}`,
       );
     revisar(
-      act.data?.some((a) => a.tipo === 'asignacion' && a.destinatario_id === V.id),
-      'la asignación le llega al Visualizador como destinatario',
+      act.data?.some((a) => a.tipo === 'asignacion' && a.destinatario_id === E.id),
+      'la asignación le llega al Editor responsable como destinatario',
     );
 
     // -------------------------------------------------------------------------
@@ -253,7 +259,7 @@ async function main() {
       .select('id')
       .single();
     if (com.error?.code === 'PGRST205' || com.error?.code === '42P01') {
-      mal('la tabla comentarios no existe', 'falta aplicar supabase/migraciones/001_comentarios_menciones.sql');
+      mal('la tabla comentarios no existe', 'falta aplicar la sección 7 de supabase/schema.sql');
     } else {
       revisar(!com.error, 'el Visualizador puede comentar', com.error?.message);
       const men = await E.sb

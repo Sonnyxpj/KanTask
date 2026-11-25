@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icono } from '@/components/ui/Icono';
 import { Colores, Espacio, Radio } from '@/constants/colores';
 import { useEquipo } from '@/lib/equipo';
+import { puedeTrabajarTarea } from '@/lib/reglas';
 import { useTablero } from '@/lib/tablero';
 
 // Calidad de compresión: el bucket admite fotos de hasta 5 MB
@@ -17,7 +18,7 @@ const CALIDAD = 0.6;
 export default function Camara() {
   const { tareaId } = useLocalSearchParams<{ tareaId?: string }>();
   const { actual } = useEquipo();
-  const { agregarEvidencia } = useTablero();
+  const { tareas, agregarEvidencia } = useTablero();
   const [permiso, pedirPermiso] = useCameraPermissions();
   const camara = useRef<CameraView>(null);
 
@@ -27,8 +28,10 @@ export default function Camara() {
   const [subiendo, setSubiendo] = useState(false);
   const [error, setError] = useState('');
 
-  const esEditor = actual?.rol === 'editor';
-  const puedeUsar = !!tareaId && esEditor;
+  const tarea = tareas.find((t) => t.id === tareaId);
+  // Editores en cualquier tarea; Programadores solo en las suyas
+  const puedeSubir = !!tarea && puedeTrabajarTarea(actual, tarea);
+  const puedeUsar = !!tareaId && puedeSubir;
 
   // Al abrir la cámara se pide la autorización una vez (el sistema muestra su diálogo de permiso)
   const pedido = useRef(false);
@@ -74,8 +77,8 @@ export default function Camara() {
   // Sin tarea o sin permiso de edición no hay nada que subir
   const bloqueo = !tareaId
     ? 'No se indicó a qué tarea pertenece la foto.'
-    : !esEditor
-      ? 'Solo los editores pueden subir evidencia.'
+    : !puedeSubir
+      ? 'Solo los editores o el programador responsable pueden subir evidencia.'
       : '';
 
   return (

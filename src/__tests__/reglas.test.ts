@@ -1,4 +1,4 @@
-import { motivoNoCierre, textoActividad } from '@/lib/reglas';
+import { motivoNoCierre, puedeSerResponsable, puedeTrabajarTarea, textoActividad } from '@/lib/reglas';
 import type { Actividad, ChecklistItem, Evidencia, Usuario } from '@/types/modelos';
 
 const item = (completado: boolean): ChecklistItem => ({
@@ -66,5 +66,28 @@ describe('textoActividad (texto personalizado del feed)', () => {
   it('otros tipos de actividad no se modifican', () => {
     const cambio: Actividad = { ...asignacion, tipo: 'cambio', texto: "'X' pasó a En progreso" };
     expect(textoActividad(cambio, 'u2', buscar)).toBe(cambio.texto);
+  });
+});
+
+describe('rol Programador', () => {
+  const editor = { id: 'e', rol: 'editor' as const };
+  const programador = { id: 'p', rol: 'programador' as const };
+  const visualizador = { id: 'v', rol: 'visualizador' as const };
+
+  it('Editores y Programadores pueden ser responsables; Visualizadores no', () => {
+    expect(puedeSerResponsable(editor)).toBe(true);
+    expect(puedeSerResponsable(programador)).toBe(true);
+    expect(puedeSerResponsable(visualizador)).toBe(false);
+  });
+
+  it('el Programador solo trabaja las tareas que tiene asignadas', () => {
+    expect(puedeTrabajarTarea(programador, { asignadoA: 'p' })).toBe(true);
+    expect(puedeTrabajarTarea(programador, { asignadoA: 'otro' })).toBe(false);
+  });
+
+  it('el Editor trabaja cualquier tarea y el Visualizador ninguna', () => {
+    expect(puedeTrabajarTarea(editor, { asignadoA: 'otro' })).toBe(true);
+    expect(puedeTrabajarTarea(visualizador, { asignadoA: 'v' })).toBe(false);
+    expect(puedeTrabajarTarea(null, { asignadoA: 'p' })).toBe(false);
   });
 });

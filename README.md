@@ -34,7 +34,7 @@ Taller de Aplicaciones Móviles · UCM · Benjamín Garrido, Iván Sánchez · P
 | 7 | **Notificaciones locales**: asignaciones, menciones y recordatorio 1 h antes del vencimiento | `lib/notificaciones.ts` |
 | 8 | **Modo offline (lectura)**: tablero, equipo y actividad guardados en el teléfono | `lib/almacen.ts` |
 | 9 | **Visualizador en solo lectura en todas las vistas** | detalle, cámara, formulario |
-| 10 | Cambio de contraseña, invitación por enlace y tarjeta de resumen del tablero | Perfil, Equipo, Tablero |
+| 10 | Cambio de contraseña y tarjeta de resumen del tablero | Perfil, Tablero |
 
 ### Pendiente / fuera de alcance
 - Cambios **sin conexión**: se ven los datos guardados, pero editar requiere internet (no hay cola de sincronización).
@@ -48,7 +48,7 @@ Taller de Aplicaciones Móviles · UCM · Benjamín Garrido, Iván Sánchez · P
 ### 1. Base de datos (Supabase)
 1. Crear un proyecto en [supabase.com](https://supabase.com).
 2. **SQL Editor** → pegar `supabase/schema.sql` → **Run**. Crea las tablas, RLS, triggers, el bucket `evidencias` y la publicación Realtime.
-   - Si la base ya tenía una versión anterior del esquema, ejecutar solo las migraciones de `supabase/migraciones/` (en orden).
+   - El archivo es para una base vacía: crea todo desde cero (roles Editor, Programador y Visualizador incluidos).
 3. El primer usuario registrado entra como **Visualizador**. Para tener un primer editor:
    ```sql
    update public.usuarios set rol = 'editor' where correo = 'tu@correo.com';
@@ -106,7 +106,7 @@ src/
 ├── services/     Acceso a Supabase (tareas, actividad, usuarios)
 ├── constants/    Colores, estados, datos de demo
 └── types/        Modelo de datos
-supabase/         schema.sql + migraciones/
+supabase/         schema.sql (esquema completo)
 ```
 
 ## Guía para la demostración
